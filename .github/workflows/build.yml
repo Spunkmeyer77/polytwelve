@@ -94,12 +94,18 @@ jobs:
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress; fi
-          "$ISCC" "/DAppVersion=$VERSION" installer/windows/Polytwelve.iss
-          cd build/Polytwelve_artefacts/Release/VST3
-          7z a "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-Windows-VST3.zip" Polytwelve.vst3 > /dev/null
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$env:VERSION" "installer\windows\Polytwelve.iss" 2>&1 | Tee-Object -FilePath iscc.log
+          if ($LASTEXITCODE -ne 0) {
+            "## Inno Setup errors" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            Get-Content iscc.log -Tail 30 | ForEach-Object { "::error::$_" }
+            exit $LASTEXITCODE
+          }
+          Compress-Archive -Path "build\Polytwelve_artefacts\Release\VST3\Polytwelve.vst3" `
+                           -DestinationPath "dist\Polytwelve-$env:VERSION-Windows-VST3.zip"
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
