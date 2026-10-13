@@ -265,7 +265,7 @@ void PolysixEditor::showPresetMenu()
     const auto current = pm.getCurrentKey();
 
     juce::PopupMenu menu;
-    constexpr int favBase = 10000;
+    static constexpr int favBase = 10000;
     auto label = [&] (const PresetManager::Entry& e) { return (pm.isFavourite (e.key) ? kStar + " " : juce::String()) + e.name; };
 
     if (pm.hasFavourites())
