@@ -35,7 +35,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read version
         run: echo "VERSION=$(sed -nE 's/^project\(Polytwelve VERSION ([0-9.]+)\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_ENV"
@@ -52,7 +52,18 @@ jobs:
         run: cmake -B build -DP12_COPY_PLUGINS=OFF ${{ matrix.configure }}
 
       - name: Build
-        run: cmake --build build --config Release --parallel 4
+        run: |
+          set +e
+          cmake --build build --config Release --parallel 4 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "## Build errors (${{ matrix.name }})" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -iE "error|fatal|undefined reference|unresolved" build.log | grep -v "warning" | head -60 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -iE " error |error:|fatal error|unresolved external" build.log | head -10 | while IFS= read -r line; do echo "::error::${line:0:900}"; done
+          fi
+          exit $status
 
       # ---- tests / validation ------------------------------------------------------------
       - name: Run plug-in tests (Linux)
