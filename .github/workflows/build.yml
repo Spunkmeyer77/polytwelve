@@ -1,0 +1,118 @@
+# Builds Polytwelve on macOS, Windows and Linux.
+# - every push / pull request: builds + installers, downloadable under the run's "Artifacts"
+# - pushing a tag like v0.4.0: also publishes a GitHub Release with all installers attached
+name: Build Polytwelve
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-14
+            configure: -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          - name: Windows
+            os: windows-2022
+            configure: ""
+          - name: Linux
+            os: ubuntu-22.04
+            configure: -DCMAKE_BUILD_TYPE=Release -DP6_BUILD_TESTS=ON
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: echo "VERSION=$(sed -nE 's/^project\(Polytwelve VERSION ([0-9.]+)\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_ENV"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxrender-dev libgl1-mesa-dev xvfb
+
+      - name: Configure
+        run: cmake -B build -DP12_COPY_PLUGINS=OFF ${{ matrix.configure }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      # ---- tests / validation ------------------------------------------------------------
+      - name: Run plug-in tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p test-out
+          xvfb-run -a build/PolytwelveTest_artefacts/Release/PolytwelveTest test-out
+
+      - name: Validate Audio Unit (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/Polytwelve_artefacts/Release/AU/Polytwelve.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          auval -v aumu Ptwv Tcro
+
+      # ---- packaging ---------------------------------------------------------------------
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x tools/make_pkg.sh
+          ./tools/make_pkg.sh
+          mv "dist/Polytwelve-$VERSION.pkg" "dist/Polytwelve-$VERSION-macOS.pkg"
+          cd build/Polytwelve_artefacts/Release
+          ditto -c -k --keepParent AU/Polytwelve.component "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-macOS-AU.zip"
+          ditto -c -k --keepParent VST3/Polytwelve.vst3    "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-macOS-VST3.zip"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress; fi
+          "$ISCC" "/DAppVersion=$VERSION" installer/windows/Polytwelve.iss
+          cd build/Polytwelve_artefacts/Release/VST3
+          7z a "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-Windows-VST3.zip" Polytwelve.vst3 > /dev/null
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x tools/package_linux.sh
+          ./tools/package_linux.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Polytwelve-${{ env.VERSION }}-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
