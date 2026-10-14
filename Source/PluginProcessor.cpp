@@ -95,14 +95,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (choice ("vcaMode", "VCA Mode", { "EG", "Gate" }, d.vcaMode));
     l.add (custom ("atten", "Attenuator", -10.0f, 10.0f, d.attenDb, [] (float v, int) { return juce::String (v, 1) + " dB"; }));
     // EG
-    auto egTime = [] (float v, int) { return fmtTime (p6::reaktorLogTimeToSec (v * 80.0f)); };
+    auto egTime = [] (float v, int) { return fmtTime (p6::logTimeToSec (v * 80.0f)); };
     l.add (custom ("attack", "Attack", 0.0f, 1.0f, d.attack, egTime));
     l.add (custom ("decay", "Decay", 0.0f, 1.0f, d.decay, egTime));
     l.add (knob ("sustain", "Sustain", d.sustain));
     l.add (custom ("release", "Release", 0.0f, 1.0f, d.release, egTime));
     // MG
     l.add (custom ("mgFreq", "MG Frequency", 0.0f, 1.0f, d.mgFreq, [] (float v, int) { return juce::String (p6::mgKnobToHz (v), 2) + " Hz"; }));
-    l.add (custom ("mgDelay", "MG Delay", 0.0f, 1.0f, d.mgDelay, [] (float v, int) { return fmtTime (p6::reaktorLogTimeToSec (v * 70.0f)); }));
+    l.add (custom ("mgDelay", "MG Delay", 0.0f, 1.0f, d.mgDelay, [] (float v, int) { return fmtTime (p6::logTimeToSec (v * 70.0f)); }));
     l.add (knob ("mgLevel", "MG Level", d.mgLevel));
     l.add (choice ("mgMode", "MG Mode", { "VCO", "VCF", "VCA" }, d.mgMode));
     // Voice

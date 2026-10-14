@@ -1,9 +1,10 @@
 # Polytwelve
 
-Programmable 12-voice synth (AU / VST3 / Standalone) by Ticco Ross, 2026.
+Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026.
 
-Its voice structure is based on the "Polysix" Reaktor ensemble by Sandy Small (2008). That ensemble
-credits Mona/Polly for design ideas, and Broken Chords and AuReality for its arpeggiator.
+- **Download:** installers for macOS, Windows and Linux are on the
+  [Releases page](https://github.com/Spunkmeyer77/polytwelve/releases/latest).
+- **Manual:** [Polytwelve User Manual (PDF)](docs/Polytwelve-Manual.pdf), every control explained.
 
 ## Build on your Mac (macOS 12+)
 
@@ -46,37 +47,25 @@ back them up or share them. Favourites are stored in `favourites.txt` in the sam
 Your Live set also remembers which preset was loaded. The first time it runs, Polytwelve copies over
 any presets saved with the earlier "Polysix Port" build.
 
-## How it maps to the ensemble
+## Sound engine
 
-| Reaktor macro | Here |
+| Section | What it does |
 |---|---|
-| VCO: Multi-Wave Osc, Waveform compares, PWM macro | Band-limited saw / pulse / PWM. Pulse width 50–95 %; PWM is a triangle LFO (0.1–12.8 Hz) |
-| VCO: Freq. Divider sub (÷2 / ÷4), added via Relay | Flip-flop divider locked to the main cycle, band-limited |
-| VCO: Octave, MG × 12 | 16'/8'/4', MG→VCO up to ±12 st (Level knob is squared for finer control) |
-| VCF: Pro-52 Filter + cutoff sum | 4-pole zero-delay ladder LP with tanh feedback. Cutoff = 21 + knob·110 semitones + (P−60)·KbdTrack + EG·Int·60 + MG·48 |
-| EG: ADSR with D/R random offsets | Exponential ADSR. Times use Reaktor's log units (0 = 1 ms, 40 = 100 ms, 60 = 1 s); knob 0–10 = 0–80 units |
-| VCA: Mixer ±10 dB, EG/Gate relay, slew-limited gate, −MG tremolo | Same |
-| MG: Ctr.Shp breakpoints, Slow Random rate wobble, AR-Env delay, Distributor | Same curve (0.01 / 1 / 8 / 15 / 20 Hz), per-voice MG, delayed fade-in, VCO/VCF/VCA routing. Mod wheel always adds up to 2 st vibrato |
-| Voice: V/F/D/R Tune, Detune, Analog | Fixed per-voice offsets plus slow drift. Analog scales pitch (±0.12 st + drift), cutoff (±2 st), decay/release; Detune adds up to ±25 cents per voice |
-| Voice: Poly / Unison / Chord Memory, Hold | Round-robin poly; Unison stacks all 12 voices; **Chord Memory works here**; Hold latches notes (CC64 sustain does the same) |
+| VCO | Band-limited saw / pulse / PWM. Pulse width 50–95 %; PWM is a triangle LFO (0.1–12.8 Hz). Octave 16'/8'/4' |
+| Sub oscillator | Square one or two octaves down (÷2 / ÷4 divider locked to the main cycle), band-limited |
+| VCF | 4-pole (24 dB/oct) zero-delay ladder low-pass with saturating feedback; self-oscillates. Cutoff, Resonance, EG Intensity (±5 oct), Kbd Track |
+| EG | Exponential ADSR, 1 ms–10 s logarithmic times, shared by VCF and VCA |
+| VCA | EG or gate mode (1 ms de-click), ±10 dB attenuator, MG tremolo |
+| MG | Per-voice triangle LFO, 0.01–20 Hz, delayed fade-in, routed to VCO, VCF or VCA. Mod wheel always adds up to ±2 st vibrato |
+| Voice | 12 voices: Poly (round-robin), Unison (all 12 on one note), Chord memory. Hold / sustain pedal. Analog (per-voice drift of pitch, cutoff, envelope and LFO rates), Detune (up to ±25 cents per voice), bend range 0–12 st |
 | Arpeggiator | Up / Down / Up-Down, 1 Oct / 2 Oct / Full (4 oct), Latch, 50 % gate. Free speed or synced to host tempo |
-| Effects: Chorus / KleinStein phaser / Ensemble | Rebuilt from scratch with the same single Speed/Intensity knob; output is stereo |
+| Effects | Chorus, 6-stage Phaser or Ensemble, one Speed/Intensity knob, stereo output |
 
 **Chord Memory:** hold a chord and press **MEMORY** (next to the Voice Mode selector). This stores
 the chord and switches to Chord mode, and the LED lights. Each key then plays that chord, transposed.
 Pressing MEMORY with no keys held just switches Chord mode on with the stored chord. The **CHORD
 MEMORY** read-out shows the stored notes (Ableton naming, middle C = C3) and the chord's name.
 The chord is saved with presets and with your Live set. The default chord is a C minor triad.
-
-## Known differences / to verify against the ensemble
-
-- The knob ranges for Cutoff, EG Intensity, Kbd Track, the envelope times, Analog and Detune
-  were chosen musically, not read from the ensemble.
-- The VCF MG depth reads "606" in the screenshot; that's implausible, so it's set to 48 semitones.
-- The ensemble adds a sine at the cutoff frequency (selected from the VCO's PW output); it's
-  left out because this ladder filter self-oscillates on its own.
-- The PWM, Chorus, KleinStein and Ensemble macro internals weren't visible, so these are new designs.
-- The on-screen keyboard is left out; it uses MIDI only.
 
 ## Engine test (no JUCE)
 

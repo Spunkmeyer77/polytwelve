@@ -1,6 +1,6 @@
 // PolysixEngine.h
 // JUCE-free DSP engine for the Polysix port.
-// Structure follows the "Polysix" Reaktor ensemble (Sandy Small, 2008):
+// Polytwelve (Ticco Ross, 2026):
 //   Voice -> VCO (+ divider sub osc) -> VCF (4-pole) -> VCA, per-voice EG and MG,
 //   12 voices summed to mono -> Effects (Chorus / Phaser / Ensemble) -> Volume.
 #pragma once
@@ -22,8 +22,8 @@ constexpr float kTwoPi     = 2.0f * kPi;
 inline float clampf (float x, float lo, float hi) { return x < lo ? lo : (x > hi ? hi : x); }
 inline float pitchToHz (float p)                  { return 440.0f * std::exp2 ((p - 69.0f) / 12.0f); }
 
-// Reaktor's logarithmic time units used by its envelopes: 0 = 1 ms, 20 = 10 ms, 40 = 100 ms, 60 = 1 s
-inline float reaktorLogTimeToSec (float v)        { return 0.001f * std::pow (10.0f, v / 20.0f); }
+// Logarithmic time units used by the envelopes: 0 = 1 ms, 20 = 10 ms, 40 = 100 ms, 60 = 1 s
+inline float logTimeToSec (float v)        { return 0.001f * std::pow (10.0f, v / 20.0f); }
 
 // ---------------------------------------------------------------------------------------------
 struct Rng
@@ -35,7 +35,7 @@ struct Rng
     float bi()      { return uni() * 2.0f - 1.0f; }                           // [-1,1)
 };
 
-// Reaktor "Slow Random": random points at rate F, smoothly interpolated
+// Slow random: random points at rate F, smoothly interpolated
 struct SlowRandom
 {
     Rng rng;
@@ -164,7 +164,6 @@ struct Vco
 
 // ---------------------------------------------------------------------------------------------
 // VCF: 4-pole zero-delay-feedback ladder low-pass with saturating feedback path.
-// (The ensemble uses Reaktor's closed "Pro-52 Filter" module, a 24 dB/oct Prophet-style LP.)
 struct Ladder
 {
     float s[4] = { 0, 0, 0, 0 };
@@ -740,7 +739,7 @@ private:
         const float mgHz = mgKnobToHz (p.mgFreq) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
         v.mgPhase += mgHz * invSr; if (v.mgPhase >= 1.0f) v.mgPhase -= 1.0f;
         const float tri = triFromPhase (v.mgPhase);
-        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / reaktorLogTimeToSec (p.mgDelay * 70.0f));
+        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / logTimeToSec (p.mgDelay * 70.0f));
         else        v.mgEnv = std::max (0.0f, v.mgEnv - invSr / 0.001f);
         const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel;
 
@@ -764,9 +763,9 @@ private:
         const float osc = 0.55f * v.vco.process (pitchToHz (oscPitch), invSr, p.waveform, pw, p.subOsc);
 
         // EG
-        const float aSec = reaktorLogTimeToSec (p.attack * 80.0f);
-        const float dSec = reaktorLogTimeToSec (p.decay * 80.0f + an * 3.0f * v.offDecay);
-        const float rSec = reaktorLogTimeToSec (p.release * 80.0f + an * 3.0f * v.offRelease);
+        const float aSec = logTimeToSec (p.attack * 80.0f);
+        const float dSec = logTimeToSec (p.decay * 80.0f + an * 3.0f * v.offDecay);
+        const float rSec = logTimeToSec (p.release * 80.0f + an * 3.0f * v.offRelease);
         const float eg = v.eg.tick (aSec, dSec, p.sustain, rSec, sr);
 
         // VCF
