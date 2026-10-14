@@ -1,6 +1,6 @@
 // PolysixEngine.h
-// JUCE-free DSP engine for the Polysix port.
-// Polytwelve (Ticco Ross, 2026):
+// JUCE-free DSP engine for Polytwelve.
+// Signal flow:
 //   Voice -> VCO (+ divider sub osc) -> VCF (4-pole) -> VCA, per-voice EG and MG,
 //   12 voices summed to mono -> Effects (Chorus / Phaser / Ensemble) -> Volume.
 #pragma once
