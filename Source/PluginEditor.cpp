@@ -165,12 +165,13 @@ PolysixEditor::PolysixEditor (PolysixAudioProcessor& p) : AudioProcessorEditor (
                 vm->setValueNotifyingHost (vm->convertTo0to1 (2.0f));
             flashTicks = 4;
         };
-        addCustom (voice, std::move (b), "MEMORY", 1);
+        addCustom (voice, std::move (b), "MEMORY", 0.75f);
     }
-    add (voice, Kind::Toggle, "hold", "HOLD");
+    add (voice, Kind::Toggle, "hold", "HOLD", 0.75f);
+    add (voice, Kind::Knob, "glide", "GLIDE");
+    add (voice, Kind::Toggle, "glideLegato", "LEGATO", 0.75f);
     add (voice, Kind::Knob, "analog", "ANALOG");
     add (voice, Kind::Knob, "detune", "DETUNE");
-    add (voice, Kind::Knob, "bendRange", "BEND");
 
     auto& arp = addSection ("ARPEGGIATOR", 2);
     add (arp, Kind::Toggle, "arpOn", "ARPEGGIO");
@@ -185,11 +186,26 @@ PolysixEditor::PolysixEditor (PolysixAudioProcessor& p) : AudioProcessorEditor (
     add (fx, Kind::Choice, "fxMode", "MODE");
     add (fx, Kind::Knob, "fxSpeed", "SPEED/INT");
 
+    auto& wheels = addSection ("WHEELS", 2);
+    add (wheels, Kind::Knob, "bendRange", "BEND RANGE");
+    {
+        auto pw = std::make_unique<PerfWheel> (true);
+        pitchWheel = pw.get();
+        pitchWheel->setTooltip ("Pitch bend: drag up or down; springs back to the centre");
+        pitchWheel->onChange = [this] (float v) { proc.setUiPitchBend (v); };
+        addCustom (wheels, std::move (pw), "PITCH", 0.75f, Kind::Wheel);
+        auto mw = std::make_unique<PerfWheel> (false);
+        modWheel = mw.get();
+        modWheel->setTooltip ("Modulation wheel: adds MG vibrato");
+        modWheel->onChange = [this] (float v) { proc.setUiModWheel (v); };
+        addCustom (wheels, std::move (mw), "MOD", 0.75f, Kind::Wheel);
+    }
+
     auto& chord = addSection ("CHORD MEMORY", 2);
     {
         auto d = std::make_unique<ChordDisplay>();
         chordDisplay = d.get();
-        addCustom (chord, std::move (d), "STORED CHORD", 4);
+        addCustom (chord, std::move (d), "STORED CHORD", 2.5f);
     }
 
     // program selector
@@ -219,14 +235,16 @@ PolysixEditor::PolysixEditor (PolysixAudioProcessor& p) : AudioProcessorEditor (
         for (auto& s : sections)
             if (s.row == row)
             {
-                int cells = 0; for (auto& c : s.ctrls) cells += c->span;
-                w += cells * kCellW + 2 * kSecPad + 10;
+                int cw = 0; for (auto& c : s.ctrls) cw += juce::roundToInt (c->span * kCellW);
+                w += cw + 2 * kSecPad + 10;
             }
         widest = juce::jmax (widest, w);
     }
     setSize (widest - 10 + 2 * kMargin, kTopH + 3 * (kCellH + kTitleH + 2 * kSecPad) + 2 * kRowGap + 20);
 
     refreshChordDisplay();
+    pitchWheel->setDisplayValue (proc.getPitchBendDisplay());
+    modWheel->setDisplayValue (proc.getModWheelDisplay());
     startTimerHz (15);
 }
 
@@ -366,10 +384,10 @@ PolysixEditor::Section& PolysixEditor::addSection (const juce::String& title, in
     return sections.back();
 }
 
-void PolysixEditor::add (Section& s, Kind kind, const juce::String& id, const juce::String& label)
+void PolysixEditor::add (Section& s, Kind kind, const juce::String& id, const juce::String& label, float span)
 {
     auto c = std::make_unique<Ctrl>();
-    c->kind = kind; c->paramId = id; c->label = label;
+    c->kind = kind; c->paramId = id; c->label = label; c->span = span;
     auto& st = proc.apvts;
 
     if (kind == Kind::Knob)
@@ -399,10 +417,10 @@ void PolysixEditor::add (Section& s, Kind kind, const juce::String& id, const ju
     s.ctrls.push_back (std::move (c));
 }
 
-void PolysixEditor::addCustom (Section& s, std::unique_ptr<juce::Component> comp, const juce::String& label, int span)
+void PolysixEditor::addCustom (Section& s, std::unique_ptr<juce::Component> comp, const juce::String& label, float span, Kind kind)
 {
     auto c = std::make_unique<Ctrl>();
-    c->kind = Kind::Custom; c->label = label; c->span = span;
+    c->kind = kind; c->label = label; c->span = span;
     c->comp = std::move (comp);
     addAndMakeVisible (*c->comp);
     s.ctrls.push_back (std::move (c));
@@ -418,19 +436,21 @@ void PolysixEditor::resized()
         for (auto& s : sections)
         {
             if (s.row != row) continue;
-            int cells = 0; for (auto& c : s.ctrls) cells += c->span;
-            const int w = cells * kCellW + 2 * kSecPad;
+            int cw = 0; for (auto& c : s.ctrls) cw += juce::roundToInt (c->span * kCellW);
+            const int w = cw + 2 * kSecPad;
             s.bounds = { x, y, w, secH };
             int cx = x + kSecPad;
             for (auto& c : s.ctrls)
             {
-                c->cell = { cx, y + kSecPad, kCellW * c->span, kCellH };
+                const int cellW = juce::roundToInt (c->span * kCellW);
+                c->cell = { cx, y + kSecPad, cellW, kCellH };
                 auto area = c->cell.withTrimmedBottom (22);
                 if (c->kind == Kind::Knob)        c->comp->setBounds (area.withSizeKeepingCentre (64, 64));
                 else if (c->kind == Kind::Choice) c->comp->setBounds (area.withSizeKeepingCentre (kCellW - 4, 24));
-                else if (c->span > 1)             c->comp->setBounds (area.reduced (6, 6));
+                else if (c->kind == Kind::Wheel)  c->comp->setBounds (area.withSizeKeepingCentre (28, 66));
+                else if (c->span > 1.0f)          c->comp->setBounds (area.reduced (6, 6));
                 else                              c->comp->setBounds (area.withSizeKeepingCentre (40, 32));
-                cx += kCellW * c->span;
+                cx += cellW;
             }
             x += w + 10;
         }
@@ -460,10 +480,24 @@ void PolysixEditor::paint (juce::Graphics& g)
     // header
     g.setColour (kText);
     g.setFont (juce::Font (juce::FontOptions (22.0f, juce::Font::bold)));
+    const juce::Font titleFont (juce::FontOptions (22.0f, juce::Font::bold));
+    g.setFont (titleFont);
     g.drawText ("POLYTWELVE", kMargin, 8, 400, 28, juce::Justification::centredLeft);
+    const int titleW = (int) std::ceil (juce::GlyphArrangement::getStringWidth (titleFont, "POLYTWELVE"));
+
+    // build version, right after the name
+    const juce::Font versionFont (juce::FontOptions (11.0f, juce::Font::bold));
+    const juce::String version = juce::String ("v") + JucePlugin_VersionString;
+    const int versionX = kMargin + titleW + 8;
+    const int versionW = (int) std::ceil (juce::GlyphArrangement::getStringWidth (versionFont, version)) + 10;
+    g.setColour (kLine);
+    g.fillRoundedRectangle ((float) versionX, 15.0f, (float) versionW, 16.0f, 3.0f);
+    g.setColour (kText.withAlpha (0.85f));
+    g.setFont (versionFont);
+    g.drawText (version, versionX, 15, versionW, 16, juce::Justification::centred);
     g.setFont (juce::Font (juce::FontOptions (11.0f)));
     g.setColour (kText.withAlpha (0.6f));
-    g.drawText (juce::String (juce::CharPointer_UTF8 ("PROGRAMMABLE 12 VOICE SYNTH  \xc2\xb7  TICCO ROSS 2026")), kMargin + 168, 14, 380, 20,
+    g.drawText (juce::String (juce::CharPointer_UTF8 ("PROGRAMMABLE 12 VOICE SYNTH  \xc2\xb7  TICCO ROSS 2026")), versionX + versionW + 14, 14, 380, 20,
                 juce::Justification::centredLeft);
 
     for (auto& s : sections)
@@ -595,7 +629,72 @@ void PolysixEditor::timerCallback()
     if (flashTicks > 0) --flashTicks;
     memoryBtn->setLit (chordMode && (flashTicks == 0 || (flashTicks % 2) == 1));
 
+    pitchWheel->setDisplayValue (proc.getPitchBendDisplay());
+    modWheel->setDisplayValue (proc.getModWheelDisplay());
+
     const int v = proc.getChordVersion();
     if (v != lastChordVersion) { lastChordVersion = v; refreshChordDisplay(); }
     else refreshChordDisplay(); // cheap: only repaints when text/state changed
+}
+
+// ---- performance wheels -------------------------------------------------------------------------
+void PerfWheel::set (float v)
+{
+    v = juce::jlimit (spring ? -1.0f : 0.0f, 1.0f, v);
+    if (v == value) return;
+    value = v;
+    if (onChange) onChange (value);
+    repaint();
+}
+
+void PerfWheel::mouseDown (const juce::MouseEvent&) { dragging = true; startValue = value; }
+
+void PerfWheel::mouseDrag (const juce::MouseEvent& e)
+{
+    const float travel = (float) getHeight() * 0.85f;
+    set (startValue - (float) e.getDistanceFromDragStartY() / travel * (spring ? 2.0f : 1.0f));
+}
+
+void PerfWheel::mouseUp (const juce::MouseEvent&)
+{
+    dragging = false;
+    if (spring) set (0.0f);
+}
+
+void PerfWheel::paint (juce::Graphics& g)
+{
+    const auto slot = getLocalBounds().toFloat();
+    g.setColour (juce::Colour (0xff0b0d18));
+    g.fillRoundedRectangle (slot, 4.0f);
+    g.setColour (kLine);
+    g.drawRoundedRectangle (slot.reduced (0.5f), 4.0f, 1.0f);
+
+    // the wheel: shaded like a cylinder, ribs move as it turns
+    const auto wheel = slot.reduced (4.0f, 3.0f);
+    juce::ColourGradient shade (juce::Colour (0xff23283d), wheel.getX(), wheel.getY(),
+                                juce::Colour (0xff23283d), wheel.getX(), wheel.getBottom(), false);
+    shade.addColour (0.5, juce::Colour (0xff4a5274));
+    g.setGradientFill (shade);
+    g.fillRoundedRectangle (wheel, 3.0f);
+
+    g.saveState();
+    g.reduceClipRegion (wheel.toNearestInt());
+    const float pitch = 5.0f, offset = std::fmod (value * 23.0f + 100.0f * pitch, pitch);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    for (float y = wheel.getY() - pitch + offset; y < wheel.getBottom() + pitch; y += pitch)
+        g.drawHorizontalLine ((int) y, wheel.getX() + 1.0f, wheel.getRight() - 1.0f);
+    g.restoreState();
+
+    const float travel = wheel.getHeight() - 10.0f;
+    const float yMark = spring ? wheel.getCentreY() - value * travel * 0.5f
+                               : wheel.getBottom() - 5.0f - value * travel;
+
+    if (spring) // centre detent marks
+    {
+        g.setColour (kText.withAlpha (0.5f));
+        g.drawHorizontalLine ((int) wheel.getCentreY(), slot.getX() + 1.0f, wheel.getX());
+        g.drawHorizontalLine ((int) wheel.getCentreY(), wheel.getRight(), slot.getRight() - 1.0f);
+    }
+    g.setColour (juce::Colours::white.withAlpha (0.92f));
+    g.fillRoundedRectangle (wheel.getX() + 1.0f, yMark - 1.5f, wheel.getWidth() - 2.0f, 3.0f, 1.0f);
 }

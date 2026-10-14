@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Polytwelve VERSION 0.4.0)
+project(Polytwelve VERSION 0.5.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,6 +70,6 @@ if(P6_BUILD_TESTS)
     juce_add_console_app(PolytwelveTest PRODUCT_NAME "PolytwelveTest")
     target_sources(PolytwelveTest PRIVATE tools/plugin_test.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/PresetManager.cpp)
     target_compile_definitions(PolytwelveTest PRIVATE
-        JucePlugin_Name="Polytwelve" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+        JucePlugin_Name="Polytwelve" JucePlugin_VersionString="${PROJECT_VERSION}" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(PolytwelveTest PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
 endif()

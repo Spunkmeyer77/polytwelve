@@ -115,6 +115,15 @@ int main (int argc, char** argv)
         std::printf ("state chordMemory=%s chordRoot=%s\n", xml->getStringAttribute ("chordMemory").toRawUTF8(), xml->getStringAttribute ("chordRoot").toRawUTF8());
     }
 
+    // on-screen wheels reach the engine
+    {
+        proc.setUiPitchBend (0.5f); proc.setUiModWheel (0.75f);
+        juce::AudioBuffer<float> buf (2, 256); juce::MidiBuffer midi;
+        proc.processBlock (buf, midi);
+        std::printf ("wheels: bend %.2f mod %.2f (expect 0.50 0.75)\n", proc.getPitchBendDisplay(), proc.getModWheelDisplay());
+        proc.setUiPitchBend (0.0f); proc.setUiModWheel (0.3f); proc.processBlock (buf, midi);
+    }
+
     // editor snapshot
     std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
     std::printf ("editor size %d x %d\n", ed->getWidth(), ed->getHeight());

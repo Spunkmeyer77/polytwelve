@@ -51,7 +51,7 @@ const std::vector<Program>& programs()
         { "Bass", { { "octave", 0 }, { "waveform", 1 }, { "pwPwm", 0.3f }, { "subOsc", 1 }, { "cutoff", 0.3f }, { "resonance", 0.35f },
                     { "egInt", 0.5f }, { "attack", 0 }, { "decay", 0.45f }, { "sustain", 0.25f }, { "release", 0.3f } } },
         { "Square Lead", { { "waveform", 1 }, { "pwPwm", 0 }, { "voiceMode", 1 }, { "detune", 0.45f }, { "cutoff", 0.6f },
-                           { "resonance", 0.25f }, { "egInt", 0.2f }, { "mgDelay", 0.6f }, { "mgLevel", 0.35f }, { "mgFreq", 0.42f },
+                           { "resonance", 0.25f }, { "egInt", 0.2f }, { "mgDelay", 0.6f }, { "mgLevel", 0.35f }, { "mgFreq", 0.42f }, { "glide", 0.35f }, { "glideLegato", 1 },
                            { "fxMode", 1 }, { "fxSpeed", 0.3f } } },
         { "Rezzy Arp", { { "waveform", 0 }, { "cutoff", 0.42f }, { "resonance", 0.75f }, { "egInt", 0.5f }, { "decay", 0.35f },
                          { "sustain", 0 }, { "release", 0.3f }, { "arpOn", 1 }, { "arpSync", 1 }, { "arpDiv", 3 }, { "arpRange", 1 },
@@ -111,6 +111,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (knob ("analog", "Analog", d.analog));
     l.add (knob ("detune", "Detune", d.detune));
     l.add (custom ("bendRange", "Bend Range", 0.0f, 12.0f, d.bendRange, [] (float v, int) { return juce::String ((int) v) + " st"; }, 1.0f));
+    l.add (custom ("glide", "Glide", 0.0f, 1.0f, d.glide, [] (float v, int)
+    {
+        return v <= 0.0f ? juce::String ("Off") : fmtTime (0.005f * std::pow (600.0f, v));
+    }));
+    l.add (toggle ("glideLegato", "Glide Legato", d.glideLegato));
     // Arpeggiator
     l.add (toggle ("arpOn", "Arpeggio", d.arpOn));
     l.add (custom ("arpSpeed", "Arp Speed", 0.0f, 1.0f, d.arpSpeed,
@@ -135,7 +140,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
             r ("cutoff"), r ("resonance"), r ("egInt"), r ("kbdTrack"), r ("vcaMode"), r ("atten"),
             r ("attack"), r ("decay"), r ("sustain"), r ("release"),
             r ("mgFreq"), r ("mgDelay"), r ("mgLevel"), r ("mgMode"),
-            r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"),
+            r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"), r ("glide"), r ("glideLegato"),
             r ("arpOn"), r ("arpSpeed"), r ("arpRange"), r ("arpMode"), r ("arpLatch"), r ("arpSync"), r ("arpDiv"),
             r ("fxMode"), r ("fxSpeed") };
 
@@ -166,6 +171,7 @@ void PolysixAudioProcessor::pullParams()
     p.attack = f (raw.attack); p.decay = f (raw.decay); p.sustain = f (raw.sustain); p.release = f (raw.release);
     p.mgFreq = f (raw.mgFreq); p.mgDelay = f (raw.mgDelay); p.mgLevel = f (raw.mgLevel); p.mgMode = i (raw.mgMode);
     p.voiceMode = i (raw.voiceMode); p.hold = b (raw.hold); p.analog = f (raw.analog); p.detune = f (raw.detune); p.bendRange = f (raw.bendRange);
+    p.glide = f (raw.glide); p.glideLegato = b (raw.glideLegato);
     p.arpOn = b (raw.arpOn); p.arpSpeed = f (raw.arpSpeed); p.arpRange = i (raw.arpRange); p.arpMode = i (raw.arpMode);
     p.arpLatch = b (raw.arpLatch); p.arpSync = b (raw.arpSync); p.arpDiv = i (raw.arpDiv);
     p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed);
@@ -199,6 +205,10 @@ void PolysixAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
     engine.setTransport (playing, bpm, ppq);
 
+    // on-screen wheels
+    if (uiBendDirty.exchange (false)) engine.pitchBend (uiBend.load());
+    if (uiModDirty.exchange (false))  engine.modWheel (uiMod.load());
+
     buffer.clear();
     const int n = buffer.getNumSamples();
     float* L = buffer.getWritePointer (0);
@@ -212,6 +222,9 @@ void PolysixAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         handleMidi (meta.getMessage());
     }
     if (pos < n) engine.render (L + pos, R + pos, n - pos);
+
+    shownBend.store (engine.getPitchBend());
+    shownMod.store (engine.getModWheel());
 }
 
 // ---- programs ----------------------------------------------------------------------------------

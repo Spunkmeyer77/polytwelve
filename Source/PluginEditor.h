@@ -25,6 +25,23 @@ private:
     bool lit = false;
 };
 
+// Pitch-bend / modulation wheel. Pitch springs back to the centre on release; mod stays put.
+class PerfWheel : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit PerfWheel (bool springBack) : spring (springBack) {}
+    std::function<void (float)> onChange;
+    void setDisplayValue (float v) { if (! dragging && std::abs (v - value) > 1.0e-4f) { value = v; repaint(); } }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+private:
+    bool spring, dragging = false;
+    float value = 0.0f, startValue = 0.0f;
+    void set (float v);
+};
+
 // Amber read-out showing the stored chord
 class ChordDisplay : public juce::Component
 {
@@ -48,7 +65,7 @@ public:
     void resized() override;
 
 private:
-    enum class Kind { Knob, Choice, Toggle, Custom };
+    enum class Kind { Knob, Choice, Toggle, Custom, Wheel };
     struct Ctrl
     {
         Kind kind; juce::String paramId, label;
@@ -57,7 +74,7 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>   bAtt;
         juce::Rectangle<int> cell;
-        int span = 1;
+        float span = 1.0f;
     };
     struct Section { juce::String title; int row; std::vector<std::unique_ptr<Ctrl>> ctrls; juce::Rectangle<int> bounds; };
 
@@ -78,11 +95,14 @@ private:
     void openPresetFile();
 
     Section& addSection (const juce::String& title, int row);
-    void add (Section&, Kind, const juce::String& id, const juce::String& label);
-    void addCustom (Section&, std::unique_ptr<juce::Component>, const juce::String& label, int span);
+    void add (Section&, Kind, const juce::String& id, const juce::String& label, float span = 1.0f);
+    void addCustom (Section&, std::unique_ptr<juce::Component>, const juce::String& label, float span, Kind kind = Kind::Custom);
 
     // chord memory
+    juce::TooltipWindow tooltips { this, 700 };
     LedButton*    memoryBtn = nullptr;
+    PerfWheel*    pitchWheel = nullptr;
+    PerfWheel*    modWheel = nullptr;
     ChordDisplay* chordDisplay = nullptr;
     int lastChordVersion = -1, flashTicks = 0;
     void timerCallback() override;

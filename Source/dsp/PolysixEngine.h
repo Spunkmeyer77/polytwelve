@@ -94,6 +94,8 @@ struct Params
     float analog    = 0.3f;    // 0..1
     float detune    = 0.2f;    // 0..1
     float bendRange = 2.0f;    // 0..12 semitones
+    float glide     = 0.0f;    // 0 = off .. 1 = 3 s (portamento time)
+    bool  glideLegato = false; // glide only between overlapping notes
     // Arpeggiator
     bool  arpOn = false, arpLatch = false, arpSync = false;
     float arpSpeed = 0.5f;     // 0..1 (free running)
@@ -236,6 +238,7 @@ struct Voice
     Ladder vcf;
     Adsr   eg;
     float  gateSlew = 0.0f;  // VCA gate mode (slew-limited gate)
+    float  pitchNow = 60.0f; // glided note pitch (semitones)
     float  mgPhase = 0.0f, mgEnv = 0.0f, pwmPhase = 0.0f;
 
     // fixed per-voice "component tolerances" (V/F/D/R Tune + Detune in the ensemble)
@@ -250,9 +253,11 @@ struct Voice
         drift.init (seed * 3u + 1u); mgRateRnd.init (seed * 5u + 7u); pwmRateRnd.init (seed * 11u + 3u);
     }
 
-    void start (int n, uint64_t t)
+    // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
+    void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
         if (! active) { vcf.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
+        pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
         eg.gateOn();
     }
@@ -447,6 +452,8 @@ public:
         if (logical[(size_t) note]) { logical[(size_t) note] = false; logicalOff (note); }
     }
 
+    float getPitchBend() const       { return bend; }
+    float getModWheel() const        { return mw; }
     void setSustainPedal (bool down) { pedal = down; }
     void pitchBend (float v)         { bend = clampf (v, -1.0f, 1.0f); }
     void modWheel (float v)          { mw = clampf (v, 0.0f, 1.0f); }
@@ -505,6 +512,7 @@ private:
 
     float bend = 0.0f, mw = 0.0f;
     bool  pedal = false;
+    float lastPlayed = -1.0f;        // pitch of the most recent note (poly glide source)
     float smCutoff = 0.75f, smRes = 0.0f, smVol = 0.75f, smAtten = 0.0f;
     float dcX = 0.0f, dcY = 0.0f;
 
@@ -571,19 +579,27 @@ private:
     }
 
     // ---- play layer (voice modes) -----------------------------------------------------------
+    bool anyGateHeld() const { for (auto& v : voices) if (v.gate) return true; return false; }
+
+    // should a new note glide? (Legato mode: only when it overlaps a held note)
+    bool glideAllowed (bool overlapping) const { return p.glide > 0.0f && (! p.glideLegato || overlapping); }
+
     void playOn (int note)
     {
         if (p.voiceMode == 0)
         {
+            const bool doGlide = glideAllowed (anyGateHeld()) && lastPlayed >= 0.0f;
             Voice& v = voices[(size_t) allocVoice (note)];
-            v.start (note, ++now);
+            v.start (note, ++now, doGlide ? lastPlayed : -1.0f);
         }
         else
         {
+            const bool overlapping = ! monoStack.empty();
             monoStack.erase (std::remove (monoStack.begin(), monoStack.end(), note), monoStack.end());
             monoStack.push_back (note);
-            triggerMono (note);
+            triggerMono (note, overlapping);
         }
+        lastPlayed = (float) note;
     }
 
     void playOff (int note)
@@ -597,25 +613,34 @@ private:
             monoStack.erase (std::remove (monoStack.begin(), monoStack.end(), note), monoStack.end());
             if (note == monoNote)
             {
-                if (! monoStack.empty()) triggerMono (monoStack.back());
+                if (! monoStack.empty()) { triggerMono (monoStack.back(), true); lastPlayed = (float) monoStack.back(); }
                 else { for (auto& v : voices) v.stop (++now); monoNote = -1; }
             }
         }
     }
 
-    void triggerMono (int note)
+    void triggerMono (int note, bool overlapping)
     {
         monoNote = note;
+        const bool doGlide = glideAllowed (overlapping);
+        // each voice glides from where it is; an idle voice from the last note played
+        auto from = [&] (const Voice& v, int offset) -> float
+        {
+            if (! doGlide) return -1.0f;
+            if (v.active) return v.pitchNow;
+            return lastPlayed >= 0.0f ? lastPlayed + (float) offset : -1.0f;
+        };
         if (p.voiceMode == 1) // unison: all twelve voices on one note
         {
-            for (auto& v : voices) v.start (note, ++now);
+            for (auto& v : voices) v.start (note, ++now, from (v, 0));
         }
         else // chord memory
         {
             const size_t n = (size_t) std::clamp (chordSize.load (std::memory_order_relaxed), 1, kNumVoices);
             for (size_t i = 0; i < (size_t) kNumVoices; ++i)
             {
-                if (i < n) voices[i].start (std::clamp (note + chordInt[i].load (std::memory_order_relaxed), 0, 127), ++now);
+                const int iv = chordInt[i].load (std::memory_order_relaxed);
+                if (i < n) voices[i].start (std::clamp (note + iv, 0, 127), ++now, from (voices[i], iv));
                 else       voices[i].stop (++now);
             }
         }
@@ -644,6 +669,7 @@ private:
 
     void resetPerformance()
     {
+        lastPlayed = -1.0f;
         releaseAllVoices();
         arpIndex = -1; arpPlaying = -1; arpGate = false; arpPhase = 0.0; arpStep = -1;
         lastVoiceMode = p.voiceMode; lastArpOn = p.arpOn; lastHold = holdActive();
@@ -745,7 +771,16 @@ private:
 
         // pitch
         const float drift = v.drift.tick (0.3f, invSr);
-        const float voicePitch = (float) v.note + p.tune + bend * p.bendRange
+        // glide (portamento): exponential approach, reaching the note in about the glide time
+        if (p.glide > 0.0f && v.pitchNow != (float) v.note)
+        {
+            const float sec = 0.005f * std::pow (600.0f, p.glide); // 5 ms .. 3 s
+            v.pitchNow += ((float) v.note - v.pitchNow) * (1.0f - std::exp (-4.0f * invSr / sec));
+            if (std::fabs ((float) v.note - v.pitchNow) < 0.001f) v.pitchNow = (float) v.note;
+        }
+        else v.pitchNow = (float) v.note;
+
+        const float voicePitch = v.pitchNow + p.tune + bend * p.bendRange
                                + p.detune * 0.25f * v.offDetune
                                + an * (0.12f * v.offPitch + 0.08f * drift);
         float oscPitch = voicePitch + (float) ((p.octave - 1) * 12) + tri * mw * 2.0f;

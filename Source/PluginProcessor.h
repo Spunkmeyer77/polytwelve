@@ -48,10 +48,18 @@ public:
     int  getChord (int* intervals, int& root) const { return engine.getChord (intervals, root); }
     int  getChordVersion() const                    { return engine.getChordVersion(); }
 
+    // on-screen wheels: UI -> engine (applied at the next block), engine -> UI (display)
+    void setUiPitchBend (float v) { uiBend.store (v); uiBendDirty.store (true); }
+    void setUiModWheel (float v)  { uiMod.store (v);  uiModDirty.store (true); }
+    float getPitchBendDisplay() const { return shownBend.load(); }
+    float getModWheelDisplay() const  { return shownMod.load(); }
+
 private:
     p6::Engine engine;
     int currentProgram = 0;
     std::unique_ptr<PresetManager> presets;
+    std::atomic<float> uiBend { 0.0f }, uiMod { 0.0f }, shownBend { 0.0f }, shownMod { 0.0f };
+    std::atomic<bool>  uiBendDirty { false }, uiModDirty { false };
 
     struct Raw
     {
@@ -59,7 +67,7 @@ private:
                            *cutoff, *resonance, *egInt, *kbdTrack, *vcaMode, *atten,
                            *attack, *decay, *sustain, *release,
                            *mgFreq, *mgDelay, *mgLevel, *mgMode,
-                           *voiceMode, *hold, *analog, *detune, *bendRange,
+                           *voiceMode, *hold, *analog, *detune, *bendRange, *glide, *glideLegato,
                            *arpOn, *arpSpeed, *arpRange, *arpMode, *arpLatch, *arpSync, *arpDiv,
                            *fxMode, *fxSpeed;
     } raw {};
