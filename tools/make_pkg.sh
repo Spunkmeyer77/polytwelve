@@ -27,17 +27,27 @@ echo "==> Packaging Polytwelve $VERSION"
 rm -rf "$OUT"
 mkdir -p "$WORK/resources"
 
+# Sign the finished bundles in the build folder (so the zips made from them are signed too).
+# The build adds files to the VST3 after linking (moduleinfo.json), which breaks the linker's
+# automatic signature; macOS then refuses to load it and hosts like Live skip the VST3.
+# Without a Developer ID they get an ad-hoc signature ("-"), which Macs accept for local plug-ins.
+for f in "$ART/AU/Polytwelve.component" "$ART/VST3/Polytwelve.vst3" "$ART/Standalone/Polytwelve.app"; do
+    if [ -n "$DEV_ID_APP" ]; then
+        echo "==> Signing $(basename "$f") with $DEV_ID_APP"
+        codesign --force --deep --options runtime --timestamp --sign "$DEV_ID_APP" "$f"
+    else
+        echo "==> Ad-hoc signing $(basename "$f")"
+        codesign --force --deep --sign - "$f"
+    fi
+    codesign --verify --deep --strict --verbose=2 "$f"
+done
+
 # name | source | install folder | package id suffix
 stage() {
     local name="$1" src="$2" dest="$3"
     local root="$WORK/$name/root"
     mkdir -p "$root$dest"
     ditto "$src" "$root$dest/$(basename "$src")"
-
-    if [ -n "$DEV_ID_APP" ]; then
-        echo "==> Signing $(basename "$src")"
-        codesign --force --options runtime --timestamp --sign "$DEV_ID_APP" "$root$dest/$(basename "$src")"
-    fi
 
     # stop Installer from "relocating" the bundle to wherever an old copy happens to be
     pkgbuild --analyze --root "$root" "$WORK/$name.plist" >/dev/null
