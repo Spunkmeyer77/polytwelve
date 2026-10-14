@@ -57,7 +57,8 @@ any presets saved with the earlier "Polysix Port" build.
 | EG | Exponential ADSR, 1 ms–10 s logarithmic times, shared by VCF and VCA |
 | VCA | EG or gate mode (1 ms de-click), ±10 dB attenuator, MG tremolo |
 | MG | Per-voice triangle LFO, 0.01–20 Hz, delayed fade-in, routed to VCO, VCF or VCA. Mod wheel always adds up to ±2 st vibrato |
-| Voice | 12 voices: Poly (round-robin), Unison (all 12 on one note), Chord memory. Hold / sustain pedal. Analog (per-voice drift of pitch, cutoff, envelope and LFO rates), Detune (up to ±25 cents per voice), bend range 0–12 st |
+| Voice | 12 voices: Poly (round-robin), Unison (all 12 on one note), Chord memory. Hold / sustain pedal. Glide (5 ms–3 s portamento, optional Legato). Analog (per-voice drift of pitch, cutoff, envelope and LFO rates), Detune (up to ±25 cents per voice) |
+| Wheels | On-screen pitch-bend wheel (springs back, range 0–12 st) and mod wheel; both follow incoming MIDI |
 | Arpeggiator | Up / Down / Up-Down, 1 Oct / 2 Oct / Full (4 oct), Latch, 50 % gate. Free speed or synced to host tempo |
 | Effects | Chorus, 6-stage Phaser or Ensemble, one Speed/Intensity knob, stereo output |
 
