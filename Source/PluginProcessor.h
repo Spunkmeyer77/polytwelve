@@ -64,7 +64,7 @@ private:
     struct Raw
     {
         std::atomic<float> *volume, *tune, *octave, *waveform, *pwPwm, *pwmSpeed, *subOsc,
-                           *cutoff, *resonance, *egInt, *kbdTrack, *vcaMode, *atten,
+                           *cutoff, *resonance, *egInt, *kbdTrack, *vcfType, *vcaMode, *atten,
                            *attack, *decay, *sustain, *release,
                            *mgFreq, *mgDelay, *mgLevel, *mgMode,
                            *voiceMode, *hold, *analog, *detune, *bendRange, *glide, *glideLegato,

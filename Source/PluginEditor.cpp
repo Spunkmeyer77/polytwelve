@@ -131,6 +131,7 @@ PolysixEditor::PolysixEditor (PolysixAudioProcessor& p) : AudioProcessorEditor (
     add (vco, Kind::Choice, "subOsc", "SUB OSC");
 
     auto& vcf = addSection ("VCF", 0);
+    add (vcf, Kind::Choice, "vcfType", "TYPE");
     add (vcf, Kind::Knob, "cutoff", "CUTOFF");
     add (vcf, Kind::Knob, "resonance", "RESONANCE");
     add (vcf, Kind::Knob, "egInt", "EG INTENSITY");

@@ -80,6 +80,7 @@ struct Params
     float resonance = 0.0f;   // 0..1
     float egInt     = 0.0f;   // -1..+1
     float kbdTrack  = 0.5f;   // 0..1
+    int   vcfType   = 0;      // 0=Classic ladder 1=SSM2044
     // VCA
     int   vcaMode   = 0;      // 0=EG 1=Gate
     float attenDb   = 0.0f;   // -10..+10 dB
@@ -193,6 +194,58 @@ struct Ladder
 };
 
 // ---------------------------------------------------------------------------------------------
+// SSM2044 model, after the Korg Polysix VCF circuit:
+//  - four OTA integrator stages; the first uses 560 pF and the other three 6.8 nF, so the first
+//    pole sits 12.1x above the rest: about 18 dB/oct just above cutoff, 24 dB/oct further up
+//  - resonance is global negative feedback (pins 2/15); the passband drops as it rises,
+//    partly compensated here
+//  - the 4k7 / 220R input divider keeps the signal small: soft OTA saturation in every stage
+//  - runs at twice the sample rate for clean resonance
+struct Ssm2044
+{
+    float s[4] = { 0, 0, 0, 0 };
+    float xPrev = 0.0f;
+
+    void reset() { s[0] = s[1] = s[2] = s[3] = 0.0f; xPrev = 0.0f; }
+
+    static constexpr float kCapRatio = 6.8e-9f / 560e-12f; // 12.14: first-stage pole offset
+    static constexpr float kPeak     = 1.57f;              // resonance peak / pole frequency
+
+    float step (float x, float g1, float g, float k)
+    {
+        const float G1 = g1 / (1.0f + g1), G = g / (1.0f + g);
+        const float S  = G * G * G * s[0] / (1.0f + g1) + (G * G * s[1] + G * s[2] + s[3]) / (1.0f + g);
+        float u = (x - k * S) / (1.0f + k * G1 * G * G * G);
+        u = std::tanh (u);                                   // feedback / input pair saturation
+
+        float v = (u - s[0]) * G1;                           // stage 1 (560 pF)
+        float y = v + s[0]; s[0] = y + v;
+        for (int i = 1; i < 4; ++i)                          // stages 2-4 (6.8 nF), soft OTA inputs
+        {
+            const float in = std::tanh (1.3f * y) * (1.0f / 1.3f);
+            v = (in - s[i]) * G;
+            y = v + s[i]; s[i] = y + v;
+        }
+        return y;
+    }
+
+    // fc = where the resonance peaks (so self-oscillation plays in tune), res 0..1
+    float process (float x, float fc, float sr, float res)
+    {
+        const float fs2 = 2.0f * sr;
+        const float fp  = fc / kPeak;
+        const float g   = std::tan (kPi * std::min (fp, 0.45f * fs2) / fs2);
+        const float g1  = std::tan (kPi * std::min (fp * kCapRatio, 0.45f * fs2) / fs2);
+        const float k    = 7.6f * res;                       // self-oscillates from about 0.86
+        const float comp = 1.0f + 0.2f * k;                  // partial bass-loss compensation
+        const float a = step (0.5f * (xPrev + x) * comp, g1, g, k);
+        const float b = step (x * comp, g1, g, k);
+        xPrev = x;
+        return 0.65f * (a + b);                              // average of the 2x steps, +2.3 dB make-up
+    }
+};
+
+// ---------------------------------------------------------------------------------------------
 // Analog-style ADSR (exponential segments, retriggers from current level)
 struct Adsr
 {
@@ -236,6 +289,7 @@ struct Voice
 
     Vco    vco;
     Ladder vcf;
+    Ssm2044 ssm;
     Adsr   eg;
     float  gateSlew = 0.0f;  // VCA gate mode (slew-limited gate)
     float  pitchNow = 60.0f; // glided note pitch (semitones)
@@ -256,7 +310,7 @@ struct Voice
     // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
     void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
-        if (! active) { vcf.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
+        if (! active) { vcf.reset(); ssm.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
         pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
         eg.gateOn();
@@ -810,8 +864,11 @@ private:
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
         const float fc = std::min (pitchToHz (cut), 0.45f * sr);
-        const float g  = std::tan (kPi * fc * invSr);
-        const float filtered = v.vcf.process (osc, g, 4.2f * smRes);
+        float filtered;
+        if (p.vcfType == 1)
+            filtered = v.ssm.process (osc, fc, sr, smRes);
+        else
+            filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
 
         // VCA
         const float step = 1000.0f * invSr; // slew-limited gate, as in the ensemble
