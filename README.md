@@ -53,7 +53,7 @@ any presets saved with the earlier "Polysix Port" build.
 |---|---|
 | VCO | Band-limited saw / pulse / PWM. Pulse width 50–95 %; PWM is a triangle LFO (0.1–12.8 Hz). Octave 16'/8'/4' |
 | Sub oscillator | Square one or two octaves down (÷2 / ÷4 divider locked to the main cycle), band-limited |
-| VCF | Two types. **Classic:** 4-pole (24 dB/oct) zero-delay ladder low-pass with saturating feedback. **SSM2044:** model of the Korg Polysix filter chip (560 pF + 3 × 6.8 nF OTA stages, ~18 dB/oct near cutoff, soft OTA saturation, bass thins with resonance). Both self-oscillate in tune. Cutoff, Resonance, EG Intensity (±5 oct), Kbd Track |
+| VCF | 4-pole (24 dB/oct) zero-delay ladder low-pass with saturating feedback; self-oscillates. Cutoff, Resonance, EG Intensity (±5 oct), Kbd Track |
 | EG | Exponential ADSR, 1 ms–10 s logarithmic times, shared by VCF and VCA |
 | VCA | EG or gate mode (1 ms de-click), ±10 dB attenuator, MG tremolo |
 | MG | Per-voice triangle LFO, 0.01–20 Hz, delayed fade-in, routed to VCO, VCF or VCA. Mod wheel always adds up to ±2 st vibrato |

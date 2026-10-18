@@ -59,11 +59,6 @@ const std::vector<Program>& programs()
         { "Filter Sweep", { { "waveform", 2 }, { "pwPwm", 0.7f }, { "pwmSpeed", 0.3f }, { "cutoff", 0.32f }, { "resonance", 0.6f },
                             { "mgMode", 1 }, { "mgLevel", 0.55f }, { "mgFreq", 0.18f }, { "attack", 0.5f }, { "release", 0.6f },
                             { "fxMode", 3 }, { "fxSpeed", 0.5f } } },
-        { "SSM Bass", { { "vcfType", 1 }, { "octave", 0 }, { "waveform", 0 }, { "subOsc", 1 }, { "cutoff", 0.36f }, { "resonance", 0.6f },
-                        { "egInt", 0.45f }, { "kbdTrack", 0.6f }, { "attack", 0 }, { "decay", 0.42f }, { "sustain", 0.2f }, { "release", 0.3f } } },
-        { "SSM Brass", { { "vcfType", 1 }, { "waveform", 0 }, { "cutoff", 0.4f }, { "resonance", 0.25f }, { "egInt", 0.5f }, { "kbdTrack", 0.6f },
-                         { "attack", 0.45f }, { "decay", 0.55f }, { "sustain", 0.7f }, { "release", 0.45f }, { "analog", 0.4f },
-                         { "fxMode", 3 }, { "fxSpeed", 0.4f } } },
         { "Minor Chord", { { "voiceMode", 2 }, { "waveform", 0 }, { "cutoff", 0.45f }, { "resonance", 0.3f }, { "egInt", 0.4f },
                            { "decay", 0.45f }, { "sustain", 0.3f }, { "release", 0.4f }, { "fxMode", 1 }, { "fxSpeed", 0.35f } } },
     };
@@ -96,7 +91,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (knob ("resonance", "Resonance", d.resonance));
     l.add (custom ("egInt", "EG Intensity", -1.0f, 1.0f, d.egInt, [] (float v, int) { return juce::String (v * 10.0f, 1); }));
     l.add (knob ("kbdTrack", "Kbd Track", d.kbdTrack));
-    l.add (choice ("vcfType", "VCF Type", { "Classic", "SSM2044" }, d.vcfType));
     // VCA
     l.add (choice ("vcaMode", "VCA Mode", { "EG", "Gate" }, d.vcaMode));
     l.add (custom ("atten", "Attenuator", -10.0f, 10.0f, d.attenDb, [] (float v, int) { return juce::String (v, 1) + " dB"; }));
@@ -143,7 +137,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
 {
     auto r = [this] (const char* id) { return apvts.getRawParameterValue (id); };
     raw = { r ("volume"), r ("tune"), r ("octave"), r ("waveform"), r ("pwPwm"), r ("pwmSpeed"), r ("subOsc"),
-            r ("cutoff"), r ("resonance"), r ("egInt"), r ("kbdTrack"), r ("vcfType"), r ("vcaMode"), r ("atten"),
+            r ("cutoff"), r ("resonance"), r ("egInt"), r ("kbdTrack"), r ("vcaMode"), r ("atten"),
             r ("attack"), r ("decay"), r ("sustain"), r ("release"),
             r ("mgFreq"), r ("mgDelay"), r ("mgLevel"), r ("mgMode"),
             r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"), r ("glide"), r ("glideLegato"),
@@ -172,7 +166,7 @@ void PolysixAudioProcessor::pullParams()
     auto& p = engine.p;
     p.volume = f (raw.volume); p.tune = f (raw.tune);
     p.octave = i (raw.octave); p.waveform = i (raw.waveform); p.pwPwm = f (raw.pwPwm); p.pwmSpeed = f (raw.pwmSpeed); p.subOsc = i (raw.subOsc);
-    p.cutoff = f (raw.cutoff); p.resonance = f (raw.resonance); p.egInt = f (raw.egInt); p.kbdTrack = f (raw.kbdTrack); p.vcfType = i (raw.vcfType);
+    p.cutoff = f (raw.cutoff); p.resonance = f (raw.resonance); p.egInt = f (raw.egInt); p.kbdTrack = f (raw.kbdTrack);
     p.vcaMode = i (raw.vcaMode); p.attenDb = f (raw.atten);
     p.attack = f (raw.attack); p.decay = f (raw.decay); p.sustain = f (raw.sustain); p.release = f (raw.release);
     p.mgFreq = f (raw.mgFreq); p.mgDelay = f (raw.mgDelay); p.mgLevel = f (raw.mgLevel); p.mgMode = i (raw.mgMode);
