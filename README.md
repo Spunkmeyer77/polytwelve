@@ -1,10 +1,16 @@
 # Polytwelve
 
-Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026.
+Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026. Version 0.6.0.
+
+![Polytwelve panel](docs/panel.jpg)
 
 - **Download:** installers for macOS, Windows and Linux are on the
   [Releases page](https://github.com/Spunkmeyer77/polytwelve/releases/latest).
-- **Manual:** [Polytwelve User Manual (PDF)](docs/Polytwelve-Manual.pdf), every control explained.
+- **Manual:** [Polytwelve User Manual (PDF)](docs/Polytwelve-Manual.pdf), every control explained
+  (built by `tools/make_manual.py`), and the [Update History (PDF)](docs/Polytwelve-Update-History.pdf)
+  (`tools/make_history.py`). Update both at every release.
+- **Panel graphics:** `tools/ui/build_ui.py` builds `Resources/ui/*` and `Source/PanelLayout.h` from the
+  reference images in `tools/ui/src`.
 
 ## Build on your Mac (macOS 12+)
 

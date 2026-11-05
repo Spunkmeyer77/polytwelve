@@ -89,6 +89,7 @@ jobs:
           ./tools/make_pkg.sh
           mv "dist/Polytwelve-$VERSION.pkg" "dist/Polytwelve-$VERSION-macOS.pkg"
           cp docs/Polytwelve-Manual.pdf "dist/Polytwelve-$VERSION-Manual.pdf"
+          cp docs/Polytwelve-Update-History.pdf "dist/Polytwelve-$VERSION-Update-History.pdf"
           cd build/Polytwelve_artefacts/Release
           ditto -c -k --keepParent AU/Polytwelve.component "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-macOS-AU.zip"
           ditto -c -k --keepParent VST3/Polytwelve.vst3    "$GITHUB_WORKSPACE/dist/Polytwelve-$VERSION-macOS-VST3.zip"
@@ -108,6 +109,7 @@ jobs:
           Compress-Archive -Path "build\Polytwelve_artefacts\Release\VST3\Polytwelve.vst3" `
                            -DestinationPath "dist\Polytwelve-$env:VERSION-Windows-VST3.zip"
           Copy-Item "docs\Polytwelve-Manual.pdf" "dist\Polytwelve-$env:VERSION-Manual.pdf"
+          Copy-Item "docs\Polytwelve-Update-History.pdf" "dist\Polytwelve-$env:VERSION-Update-History.pdf"
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
@@ -115,6 +117,7 @@ jobs:
           chmod +x tools/package_linux.sh
           ./tools/package_linux.sh
           cp docs/Polytwelve-Manual.pdf "dist/Polytwelve-$VERSION-Manual.pdf"
+          cp docs/Polytwelve-Update-History.pdf "dist/Polytwelve-$VERSION-Update-History.pdf"
 
       - uses: actions/upload-artifact@v4
         with:

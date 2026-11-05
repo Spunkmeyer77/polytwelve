@@ -128,6 +128,11 @@ int main (int argc, char** argv)
     std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
     std::printf ("editor size %d x %d\n", ed->getWidth(), ed->getHeight());
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+    {   // 2x snapshot for the manual
+        auto big = ed->createComponentSnapshot (ed->getLocalBounds(), true, 2.0f);
+        auto f2 = outDir.getChildFile ("editor_2x.png"); f2.deleteFile();
+        if (auto os2 = f2.createOutputStream()) juce::PNGImageFormat().writeImageToStream (big, *os2);
+    }
     juce::PNGImageFormat png;
     auto pngFile = outDir.getChildFile ("editor.png");
     pngFile.deleteFile();

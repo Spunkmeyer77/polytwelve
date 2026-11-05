@@ -1,251 +1,466 @@
 #include "PluginEditor.h"
+#include "BinaryData.h"
 
 namespace
 {
-const juce::Colour kPanel     { 0xff1c2347 };
-const juce::Colour kPanelDark { 0xff141a37 };
-const juce::Colour kLine      { 0xff3a4475 };
-const juce::Colour kText      { 0xffe9ecf5 };
-const juce::Colour kWood      { 0xff6b3a1e };
-const juce::Colour kLed       { 0xffff3b2f };
+const juce::Colour kCream     { 0xffeee6c8 };
+const juce::Colour kCreamDim  { 0xffc8c4b0 };
+const juce::Colour kAmber     { 0xffffb03c };
+const juce::Colour kRed       { 0xffff3c28 };
+const juce::Colour kMenuBg    { 0xff1d2a44 };
+const juce::Colour kMenuLine  { 0xff3a5480 };
 
-constexpr int kCellW = 78, kCellH = 96, kSecPad = 8, kTitleH = 20, kRowGap = 12, kMargin = 34, kTopH = 44;
+juce::Image loadImage (const juce::String& file)
+{
+    int size = 0;
+    const auto id = file.replaceCharacter ('.', '_').replaceCharacter ('-', '_');
+    if (auto* data = BinaryData::getNamedResource (id.toRawUTF8(), size))
+        return juce::ImageCache::getFromMemory (data, size);
+    jassertfalse;
+    return {};
+}
+
+juce::Typeface::Ptr loadFace (const char* id)
+{
+    int size = 0;
+    if (auto* data = BinaryData::getNamedResource (id, size))
+        return juce::Typeface::createSystemTypefaceFor (data, (size_t) size);
+    return {};
+}
+
+const ui::Item* findItem (const char* id)
+{
+    for (auto& it : ui::items)
+        if (juce::String (it.id) == id) return &it;
+    return nullptr;
+}
+
+juce::Rectangle<float> rectOf (const ui::Item& it) { return { it.x, it.y, it.w, it.h }; }
+juce::Rectangle<int> boundsOf (const ui::Item& it) { return rectOf (it).getSmallestIntegerContainer(); }
+
+const juce::String kStar = juce::String (juce::CharPointer_UTF8 ("\xe2\x98\x85"));
+} // namespace
+
+// ---------------------------------------------------------------------------------------------
+PanelLookAndFeel::PanelLookAndFeel()
+{
+    cap = loadImage ("knob_cap.png");
+    setColour (juce::PopupMenu::backgroundColourId, kMenuBg);
+    setColour (juce::PopupMenu::textColourId, kCream);
+    setColour (juce::PopupMenu::headerTextColourId, kAmber);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, kMenuLine);
+    setColour (juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
+    setColour (juce::BubbleComponent::backgroundColourId, juce::Colour (0xf0101418));
+    setColour (juce::BubbleComponent::outlineColourId, kMenuLine);
+    setColour (juce::TooltipWindow::backgroundColourId, juce::Colour (0xf0101418));
+    setColour (juce::TooltipWindow::textColourId, kCream);
+    setColour (juce::TooltipWindow::outlineColourId, kMenuLine);
+    setColour (juce::AlertWindow::backgroundColourId, kMenuBg);
+    setColour (juce::AlertWindow::textColourId, kCream);
+    setColour (juce::AlertWindow::outlineColourId, kMenuLine);
+    setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff101820));
+    setColour (juce::TextEditor::textColourId, kCream);
+    setColour (juce::TextEditor::outlineColourId, kMenuLine);
+    setColour (juce::TextButton::buttonColourId, kMenuLine);
+    setColour (juce::TextButton::textColourOffId, kCream);
+    setColour (juce::Label::textColourId, kAmber);
+}
+
+void PanelLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float start, float end, juce::Slider&)
+{
+    // The skirt and scale are printed on the panel; only the cap turns.
+    const float d = (float) juce::jmin (w, h);
+    const float cx = (float) x + (float) w * 0.5f + ui::capOffX * d;
+    const float cy = (float) y + (float) h * 0.5f + ui::capOffY * d;
+    const float cw = ui::capScale * d;
+    const float angle = start + pos * (end - start);
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    const auto t = juce::AffineTransform::translation (-(float) cap.getWidth() * 0.5f, -(float) cap.getHeight() * 0.5f)
+                       .rotated (angle)
+                       .scaled (cw / (float) cap.getWidth())
+                       .translated (cx, cy);
+    g.drawImageTransformed (cap, t);
+}
+
+juce::Font PanelLookAndFeel::getPopupMenuFont()            { return juce::Font (juce::FontOptions (14.0f, juce::Font::bold)); }
+juce::Font PanelLookAndFeel::getSliderPopupFont (juce::Slider&) { return juce::Font (juce::FontOptions (14.0f, juce::Font::bold)); }
+
+// ---------------------------------------------------------------------------------------------
+ImgButton::ImgButton (const juce::String& id)
+{
+    off = loadImage ("btn_" + id + "_0.png");
+    on  = loadImage ("btn_" + id + "_1.png");
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void ImgButton::paint (juce::Graphics& g)
+{
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (shown ? on : off, getLocalBounds().toFloat().translated (0.0f, down ? 1.0f : 0.0f), juce::RectanglePlacement::stretchToFit);
+}
+
+void ImgButton::mouseUp (const juce::MouseEvent& e)
+{
+    down = false;
+    repaint();
+    if (getLocalBounds().contains (e.getPosition()) && onClick) onClick();
+}
+
+bool ImgButton::hitTest (int x, int y)
+{
+    // the pill plus the LED above it, not the transparent margin
+    return getLocalBounds().reduced (6, 2).contains (x, y);
 }
 
 // ---------------------------------------------------------------------------------------------
-PolysixLookAndFeel::PolysixLookAndFeel()
+SlideSwitch::SlideSwitch (juce::RangedAudioParameter& p, int positions, float switchWidth)
+    : param (p), attachment (p, [this] (float v) { pos = juce::jlimit (0, n - 1, juce::roundToInt (v)); repaint(); }),
+      n (positions), swW (switchWidth)
 {
-    setColour (juce::ComboBox::backgroundColourId, kPanelDark);
-    setColour (juce::ComboBox::textColourId, kText);
-    setColour (juce::ComboBox::outlineColourId, kLine);
-    setColour (juce::ComboBox::arrowColourId, kText);
-    setColour (juce::PopupMenu::backgroundColourId, kPanelDark);
-    setColour (juce::PopupMenu::textColourId, kText);
-    setColour (juce::PopupMenu::highlightedBackgroundColourId, kLine);
-    setColour (juce::BubbleComponent::backgroundColourId, kPanelDark);
-    setColour (juce::BubbleComponent::outlineColourId, kLine);
-    setColour (juce::TooltipWindow::textColourId, kText);
-    setColour (juce::TextButton::buttonColourId, kPanelDark);
-    setColour (juce::TextButton::buttonOnColourId, kLine);
-    setColour (juce::TextButton::textColourOffId, kText);
-    setColour (juce::TextButton::textColourOnId, juce::Colours::white);
-    setColour (juce::AlertWindow::backgroundColourId, kPanelDark);
-    setColour (juce::AlertWindow::textColourId, kText);
-    setColour (juce::AlertWindow::outlineColourId, kLine);
-    setColour (juce::TextEditor::backgroundColourId, kPanel);
-    setColour (juce::TextEditor::textColourId, kText);
-    setColour (juce::TextEditor::outlineColourId, kLine);
+    for (int i = 0; i < n; ++i)
+        images[i] = loadImage ("sw" + juce::String (n) + "_" + juce::String (i) + ".png");
+    attachment.sendInitialUpdate();
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void PolysixLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float start, float end, juce::Slider&)
+void SlideSwitch::paint (juce::Graphics& g)
 {
-    const auto area   = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (6.0f);
-    const float r     = juce::jmin (area.getWidth(), area.getHeight()) * 0.5f;
-    const auto centre = area.getCentre();
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (images[pos], juce::Rectangle<float> (0.0f, 0.0f, swW, (float) getHeight()), juce::RectanglePlacement::stretchToFit);
+}
 
-    // scale ticks
-    g.setColour (kText.withAlpha (0.7f));
-    for (int i = 0; i <= 10; ++i)
+void SlideSwitch::setPos (int p)
+{
+    p = juce::jlimit (0, n - 1, p);
+    if (p != pos) attachment.setValueAsCompleteGesture ((float) p);
+}
+
+void SlideSwitch::mouseDown (const juce::MouseEvent& e)
+{
+    setPos ((int) std::floor ((float) e.y / (float) getHeight() * (float) n));
+}
+
+void SlideSwitch::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& w)
+{
+    if (w.deltaY != 0.0f) setPos (pos + ((w.deltaY * (w.isReversed ? -1.0f : 1.0f)) > 0 ? -1 : 1));
+}
+
+// ---------------------------------------------------------------------------------------------
+void PerfWheel::set (float v)
+{
+    v = juce::jlimit (spring ? -1.0f : 0.0f, 1.0f, v);
+    if (v == value) return;
+    value = v;
+    if (onChange) onChange (value);
+    repaint();
+}
+
+void PerfWheel::mouseDown (const juce::MouseEvent&) { dragging = true; startValue = value; }
+
+void PerfWheel::mouseDrag (const juce::MouseEvent& e)
+{
+    const float travel = (float) getHeight() * 0.7f;
+    set (startValue - (float) e.getDistanceFromDragStartY() / travel * (spring ? 2.0f : 1.0f));
+}
+
+void PerfWheel::mouseUp (const juce::MouseEvent&)
+{
+    dragging = false;
+    if (spring) set (0.0f);
+}
+
+void PerfWheel::paint (juce::Graphics& g)
+{
+    // the rubber wheel in the picture sits in the left part of its slot
+    const auto slot = getLocalBounds().toFloat();
+    const auto wheel = juce::Rectangle<float> (slot.getX() + slot.getWidth() * 0.12f, slot.getY() + slot.getHeight() * 0.12f,
+                                               slot.getWidth() * 0.62f, slot.getHeight() * 0.76f);
+    const float travel = wheel.getHeight() - 8.0f;
+    const float y = spring ? wheel.getCentreY() - value * travel * 0.5f : wheel.getBottom() - 4.0f - value * travel;
+
+    // the wheel looks rounded, so the mark narrows and fades near the ends
+    const float edge = std::abs (y - wheel.getCentreY()) / (wheel.getHeight() * 0.5f);
+    const float alpha = juce::jlimit (0.25f, 1.0f, 1.0f - edge * edge * 0.75f);
+    g.setColour (juce::Colours::black.withAlpha (0.45f * alpha));
+    g.fillRoundedRectangle (wheel.getX() + 2.0f, y - 1.0f, wheel.getWidth() - 4.0f, 4.0f, 1.5f);
+    g.setColour (kCream.withAlpha (0.95f * alpha));
+    g.fillRoundedRectangle (wheel.getX() + 2.0f, y - 2.0f, wheel.getWidth() - 4.0f, 3.0f, 1.5f);
+
+    if (spring) // centre detent marks beside the wheel
     {
-        const float a = start + (end - start) * (float) i / 10.0f;
-        const auto p1 = centre.getPointOnCircumference (r + 1.0f, a);
-        const auto p2 = centre.getPointOnCircumference (r + (i % 5 == 0 ? 5.0f : 3.5f), a);
-        g.drawLine ({ p1, p2 }, 1.0f);
+        g.setColour (kCream.withAlpha (0.6f));
+        g.fillRect (slot.getRight() - 6.0f, wheel.getCentreY() - 1.0f, 5.0f, 2.0f);
     }
+}
 
-    // white knob cap with a skirt
-    const float kr = r * 0.82f;
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.fillEllipse (centre.x - kr + 1.5f, centre.y - kr + 2.5f, kr * 2.0f, kr * 2.0f);
-    juce::ColourGradient grad (juce::Colour (0xfffafafa), centre.x, centre.y - kr, juce::Colour (0xffbfc3cc), centre.x, centre.y + kr, false);
+// ---------------------------------------------------------------------------------------------
+void StepArea::mouseDrag (const juce::MouseEvent& e)
+{
+    const float y = (float) e.getDistanceFromDragStartY() - (float) e.getDistanceFromDragStartX();
+    if (std::abs (y) > 3.0f) moved = true;
+    const float d = (lastY - y) / 12.0f;
+    if (! moved) return;
+    acc += d;
+    lastY = y;
+    while (acc >= 1.0f)  { acc -= 1.0f; if (step) step (1); }
+    while (acc <= -1.0f) { acc += 1.0f; if (step) step (-1); }
+}
+
+// ---------------------------------------------------------------------------------------------
+AboutOverlay::AboutOverlay() { setInterceptsMouseClicks (true, false); }
+
+juce::Rectangle<float> AboutOverlay::box() const
+{
+    return getLocalBounds().toFloat().withSizeKeepingCentre (600.0f, 420.0f);
+}
+
+void AboutOverlay::paint (juce::Graphics& g)
+{
+    g.fillAll (juce::Colours::black.withAlpha (0.6f));
+    const auto b = box();
+    g.setColour (juce::Colours::black.withAlpha (0.5f));
+    g.fillRoundedRectangle (b.translated (0.0f, 8.0f), 10.0f);
+    juce::ColourGradient grad (juce::Colour (0xff2f4c6e), b.getX(), b.getY(), juce::Colour (0xff22334f), b.getX(), b.getBottom(), false);
     g.setGradientFill (grad);
-    g.fillEllipse (centre.x - kr, centre.y - kr, kr * 2.0f, kr * 2.0f);
-    g.setColour (juce::Colour (0xff8a8f9c));
-    g.drawEllipse (centre.x - kr, centre.y - kr, kr * 2.0f, kr * 2.0f, 1.0f);
+    g.fillRoundedRectangle (b, 10.0f);
+    g.setColour (juce::Colour (0xff141e30));
+    g.drawRoundedRectangle (b, 10.0f, 2.0f);
 
-    // pointer
-    const float a = start + pos * (end - start);
-    g.setColour (juce::Colour (0xff15182a));
-    g.drawLine ({ centre.getPointOnCircumference (kr * 0.25f, a), centre.getPointOnCircumference (kr * 0.92f, a) }, 2.4f);
-}
-
-void PolysixLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool)
-{
-    // white switch with LED, like the Mono/Poly-style buttons in the ensemble
-    auto area = b.getLocalBounds().toFloat();
-    auto sw = juce::Rectangle<float> (0, 0, 30.0f, 22.0f).withCentre (area.getCentre());
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.fillRoundedRectangle (sw.translated (1.0f, 2.0f), 3.0f);
-    g.setColour (highlighted ? juce::Colour (0xffffffff) : juce::Colour (0xffe4e6ec));
-    g.fillRoundedRectangle (sw, 3.0f);
-    const auto led = juce::Rectangle<float> (0, 0, 8.0f, 8.0f).withCentre (sw.getCentre());
-    g.setColour (b.getToggleState() ? kLed : juce::Colour (0xff5a2420));
-    g.fillEllipse (led);
-    if (b.getToggleState())
+    const float x = b.getX() + 44.0f, w = b.getWidth() - 88.0f;
+    auto text = [&] (const juce::String& s, float y, float h, float size, juce::Colour c, bool bold = true)
     {
-        g.setColour (kLed.withAlpha (0.35f));
-        g.fillEllipse (led.expanded (3.0f));
+        g.setColour (c);
+        g.setFont (juce::Font (juce::FontOptions (size, bold ? juce::Font::bold : juce::Font::plain)));
+        g.drawText (s, juce::Rectangle<float> (x, y, w, h), juce::Justification::centredLeft);
+    };
+    text ("TICCO ROSS", b.getY() + 32.0f, 20.0f, 15.0f, kAmber);
+    g.setColour (kCream);
+    g.setFont (juce::Font (juce::FontOptions (54.0f, juce::Font::bold)).withHorizontalScale (0.8f));
+    g.drawText ("POLYTWELVE", juce::Rectangle<float> (x - 2.0f, b.getY() + 52.0f, w, 58.0f), juce::Justification::centredLeft);
+    text (juce::String ("Version ") + JucePlugin_VersionString, b.getY() + 110.0f, 18.0f, 14.0f, kCreamDim, false);
+    g.setColour (kAmber.withAlpha (0.5f));
+    g.fillRect (x, b.getY() + 142.0f, w, 1.0f);
+    const char* lines[] = {
+        "Programmable 12-voice analog-style synthesizer.",
+        "AU / VST3 / LV2 and standalone, for macOS, Windows and Linux.",
+        "",
+        "Chord memory, arpeggiator, Chorus / Phaser / Ensemble,",
+        "preset banks with favourites.",
+        "",
+        "Designed by Ticco Ross, 2026.",
+    };
+    float y = b.getY() + 156.0f;
+    for (auto* l : lines) { text (l, y, 20.0f, 14.5f, kCream, false); y += 21.0f; }
+
+    mailR = { x, b.getBottom() - 92.0f, w, 24.0f };
+    shopR = { x, b.getBottom() - 64.0f, w, 24.0f };
+    text ("ticcoross@gmail.com", mailR.getY(), 24.0f, 17.0f, kAmber);
+    text ("ticcoross.gumroad.com", shopR.getY(), 24.0f, 17.0f, kAmber);
+    g.setColour (kCreamDim.withAlpha (0.7f));
+    g.setFont (juce::Font (juce::FontOptions (11.5f)));
+    g.drawText ("Click anywhere to close", b.reduced (20.0f, 14.0f), juce::Justification::bottomRight);
+}
+
+void AboutOverlay::mouseUp (const juce::MouseEvent& e)
+{
+    const auto p = e.position;
+    if (mailR.withWidth (220.0f).contains (p))
+        juce::URL ("mailto:ticcoross@gmail.com?subject=Polytwelve%20" + juce::String (JucePlugin_VersionString)).launchInDefaultBrowser();
+    else if (shopR.withWidth (240.0f).contains (p))
+        juce::URL ("https://ticcoross.gumroad.com/").launchInDefaultBrowser();
+    else
+        setVisible (false);
+}
+
+// ---------------------------------------------------------------------------------------------
+namespace
+{
+// Ableton convention: MIDI 60 = C3
+juce::String noteName (int midi)
+{
+    static const char* names[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+    return juce::String (names[((midi % 12) + 12) % 12]) + juce::String (midi / 12 - 2);
+}
+
+juce::String pitchClass (int pc)
+{
+    static const char* names[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+    return names[((pc % 12) + 12) % 12];
+}
+
+// Name a chord from its notes; tries every note as the root and adds "/bass" for inversions
+juce::String chordName (const int* intervals, int n, int bass)
+{
+    struct Shape { std::vector<int> pcs; const char* suffix; };
+    static const std::vector<Shape> shapes {
+        { { 0, 4, 7 }, "" },        { { 0, 3, 7 }, "m" },        { { 0, 3, 6 }, "dim" },     { { 0, 4, 8 }, "aug" },
+        { { 0, 2, 7 }, "sus2" },    { { 0, 5, 7 }, "sus4" },     { { 0, 7 }, "5" },
+        { { 0, 4, 7, 10 }, "7" },   { { 0, 4, 7, 11 }, "maj7" }, { { 0, 3, 7, 10 }, "m7" },  { { 0, 3, 6, 10 }, "m7b5" },
+        { { 0, 3, 6, 9 }, "dim7" }, { { 0, 4, 7, 9 }, "6" },     { { 0, 3, 7, 9 }, "m6" },   { { 0, 3, 7, 11 }, "mMaj7" },
+        { { 0, 5, 7, 10 }, "7sus4" },
+        { { 0, 2, 4, 7 }, "add9" }, { { 0, 2, 3, 7 }, "m(add9)" },
+        { { 0, 2, 4, 7, 10 }, "9" }, { { 0, 2, 4, 7, 11 }, "maj9" }, { { 0, 2, 3, 7, 10 }, "m9" },
+        { { 0, 3, 5, 7, 10 }, "m11" }, { { 0, 2, 3, 5, 7, 10 }, "m11" }, { { 0, 4, 7, 9, 2 }, "6/9" },
+    };
+
+    std::vector<int> pcs;
+    for (int i = 0; i < n; ++i) { const int pc = (intervals[i] % 12 + 12) % 12; if (std::find (pcs.begin(), pcs.end(), pc) == pcs.end()) pcs.push_back (pc); }
+    std::sort (pcs.begin(), pcs.end());
+    if (pcs.size() == 1) return noteName (bass) + (n > 1 ? " oct" : "");
+
+    for (int rootPc : pcs)
+    {
+        std::vector<int> rel;
+        for (int pc : pcs) rel.push_back (((pc - rootPc) % 12 + 12) % 12);
+        std::sort (rel.begin(), rel.end());
+        for (const auto& s : shapes)
+        {
+            auto want = s.pcs; std::sort (want.begin(), want.end());
+            if (want == rel)
+            {
+                juce::String nm = pitchClass (bass + rootPc) + s.suffix;
+                if (rootPc != 0) nm << "/" << pitchClass (bass);
+                return nm;
+            }
+        }
     }
+    return juce::String (n) + "-note chord";
 }
-
-void PolysixLookAndFeel::drawComboBox (juce::Graphics& g, int w, int h, bool, int, int, int, int, juce::ComboBox& box)
-{
-    const auto r = juce::Rectangle<float> (0, 0, (float) w, (float) h).reduced (0.5f);
-    g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
-    g.fillRoundedRectangle (r, 3.0f);
-    g.setColour (box.findColour (juce::ComboBox::outlineColourId));
-    g.drawRoundedRectangle (r, 3.0f, 1.0f);
-    juce::Path arrow;
-    const float ax = (float) w - 10.0f, ay = (float) h * 0.5f;
-    arrow.addTriangle (ax - 4.0f, ay - 2.0f, ax + 4.0f, ay - 2.0f, ax, ay + 3.0f);
-    g.setColour (kText.withAlpha (0.8f));
-    g.fillPath (arrow);
-}
-
-juce::Font PolysixLookAndFeel::getComboBoxFont (juce::ComboBox&)
-{
-    return juce::Font (juce::FontOptions (11.5f, juce::Font::bold));
-}
-
-void PolysixLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
-{
-    label.setBounds (2, 1, box.getWidth() - 16, box.getHeight() - 2);
-    label.setFont (getComboBoxFont (box));
-    label.setMinimumHorizontalScale (0.8f);
-}
+} // namespace
 
 // ---------------------------------------------------------------------------------------------
 PolysixEditor::PolysixEditor (PolysixAudioProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&lnf);
+    background = loadImage ("panel.jpg");
+    monoFace = loadFace ("DejaVuSansMonoBold_ttf");
+    addAndMakeVisible (canvas);
 
-    auto& master = addSection ("MASTER", 0);
-    add (master, Kind::Knob, "volume", "VOLUME");
-    add (master, Kind::Knob, "tune", "TUNE");
-
-    auto& vco = addSection ("VCO", 0);
-    add (vco, Kind::Choice, "octave", "OCTAVE");
-    add (vco, Kind::Choice, "waveform", "WAVEFORM");
-    add (vco, Kind::Knob, "pwPwm", "PW/PWM");
-    add (vco, Kind::Knob, "pwmSpeed", "PWM SPEED");
-    add (vco, Kind::Choice, "subOsc", "SUB OSC");
-
-    auto& vcf = addSection ("VCF", 0);
-    add (vcf, Kind::Knob, "cutoff", "CUTOFF");
-    add (vcf, Kind::Knob, "resonance", "RESONANCE");
-    add (vcf, Kind::Knob, "egInt", "EG INTENSITY");
-    add (vcf, Kind::Knob, "kbdTrack", "KBD TRACK");
-
-    auto& vca = addSection ("VCA", 0);
-    add (vca, Kind::Choice, "vcaMode", "MODE");
-    add (vca, Kind::Knob, "atten", "ATTENUATOR");
-
-    auto& eg = addSection ("EG", 1);
-    add (eg, Kind::Knob, "attack", "ATTACK");
-    add (eg, Kind::Knob, "decay", "DECAY");
-    add (eg, Kind::Knob, "sustain", "SUSTAIN");
-    add (eg, Kind::Knob, "release", "RELEASE");
-
-    auto& mg = addSection ("MG", 1);
-    add (mg, Kind::Knob, "mgFreq", "FREQUENCY");
-    add (mg, Kind::Knob, "mgDelay", "DELAY");
-    add (mg, Kind::Knob, "mgLevel", "LEVEL");
-    add (mg, Kind::Choice, "mgMode", "MODE");
-
-    auto& voice = addSection ("VOICE", 1);
-    add (voice, Kind::Choice, "voiceMode", "MODE");
+    auto& st = proc.apvts;
+    for (auto& it : ui::items)
     {
-        auto b = std::make_unique<LedButton>();
-        memoryBtn = b.get();
-        memoryBtn->setTooltip ("Chord Memory: hold a chord and press to store it (switches to Chord mode)");
-        memoryBtn->onClick = [this]
+        const juce::String id (it.id);
+        switch (it.kind)
         {
-            proc.requestChordMemory();
-            if (auto* vm = proc.apvts.getParameter ("voiceMode"))
-                vm->setValueNotifyingHost (vm->convertTo0to1 (2.0f));
-            flashTicks = 4;
-        };
-        addCustom (voice, std::move (b), "MEMORY", 0.75f);
+            case ui::Kind::Knob:
+            {
+                auto sl = std::make_unique<juce::Slider> (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
+                sl->setRotaryParameters (juce::degreesToRadians (-135.0f), juce::degreesToRadians (135.0f), true);
+                sl->setPopupDisplayEnabled (true, true, &canvas);
+                sl->setMouseDragSensitivity (220);
+                sl->setBounds (boundsOf (it));
+                knobAtts.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (st, id, *sl));
+                if (auto* prm = st.getParameter (id))
+                {
+                    sl->setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
+                    sl->setTooltip (prm->getName (64));
+                }
+                canvas.addAndMakeVisible (*sl);
+                knobs.push_back (std::move (sl));
+                break;
+            }
+            case ui::Kind::Switch:
+            {
+                auto* prm = st.getParameter (id);
+                jassert (prm != nullptr);
+                auto sw = std::make_unique<SlideSwitch> (*prm, it.extra, it.w);
+                sw->setBounds (juce::Rectangle<float> (it.x, it.y, it.hitW, it.h).getSmallestIntegerContainer());
+                sw->setTooltip (prm->getName (64));
+                canvas.addAndMakeVisible (*sw);
+                others.push_back (std::move (sw));
+                break;
+            }
+            case ui::Kind::Button:
+                addButton (it);
+                break;
+            case ui::Kind::Wheel:
+            {
+                const bool isPitch = id == "pitchWheel";
+                auto w = std::make_unique<PerfWheel> (isPitch);
+                (isPitch ? pitchWheel : modWheel) = w.get();
+                if (isPitch)
+                {
+                    w->setTooltip ("Pitch bend: drag up or down; springs back to the centre");
+                    w->onChange = [this] (float v) { proc.setUiPitchBend (v); };
+                }
+                else
+                {
+                    w->setTooltip ("Modulation wheel: adds MG vibrato");
+                    w->onChange = [this] (float v) { proc.setUiModWheel (v); };
+                }
+                w->setBounds (boundsOf (it));
+                canvas.addAndMakeVisible (*w);
+                others.push_back (std::move (w));
+                break;
+            }
+            case ui::Kind::Display:
+            {
+                auto r = rectOf (it);
+                auto area = std::make_unique<StepArea>();
+                area->setBounds (r.getSmallestIntegerContainer());
+                if (id == "preset")
+                {
+                    presetR = r;
+                    area->click = [this] { showPresetMenu(); };
+                    area->step = [this] (int d) { proc.getPresetManager().step (d, favouritesOnly); };
+                    area->setTooltip ("Click to browse presets; scroll or drag to step through them");
+                }
+                else if (id == "chord")
+                {
+                    chordR = r;
+                    area->setTooltip ("The stored chord: hold a chord and press MEMORY to store a new one");
+                }
+                else if (id == "arpDiv")
+                {
+                    arpDivR = r;
+                    area->step = [this] (int d) { stepParam ("arpDiv", d); };
+                    area->setTooltip ("Arpeggiator step length when SYNC is on: drag, scroll or use the arrows");
+                }
+                else if (id == "bendRange")
+                {
+                    bendR = r;
+                    area->step = [this] (int d) { stepParam ("bendRange", d); };
+                    area->setTooltip ("Pitch wheel range in semitones: drag, scroll or use the arrows");
+                }
+                area->setMouseCursor (juce::MouseCursor::PointingHandCursor);
+                canvas.addAndMakeVisible (*area);
+                others.push_back (std::move (area));
+                break;
+            }
+            case ui::Kind::Logo:
+            {
+                auto area = std::make_unique<StepArea>();
+                area->setBounds (boundsOf (it));
+                area->click = [this] { about.setVisible (true); about.toFront (false); };
+                area->setTooltip ("About Polytwelve");
+                area->setMouseCursor (juce::MouseCursor::PointingHandCursor);
+                canvas.addAndMakeVisible (*area);
+                others.push_back (std::move (area));
+                break;
+            }
+            case ui::Kind::Info:
+                infoR = rectOf (it);
+                break;
+        }
     }
-    add (voice, Kind::Toggle, "hold", "HOLD", 0.75f);
-    add (voice, Kind::Knob, "glide", "GLIDE");
-    add (voice, Kind::Toggle, "glideLegato", "LEGATO", 0.75f);
-    add (voice, Kind::Knob, "analog", "ANALOG");
-    add (voice, Kind::Knob, "detune", "DETUNE");
 
-    auto& arp = addSection ("ARPEGGIATOR", 2);
-    add (arp, Kind::Toggle, "arpOn", "ARPEGGIO");
-    add (arp, Kind::Knob, "arpSpeed", "SPEED");
-    add (arp, Kind::Choice, "arpRange", "RANGE");
-    add (arp, Kind::Choice, "arpMode", "MODE");
-    add (arp, Kind::Toggle, "arpLatch", "LATCH");
-    add (arp, Kind::Toggle, "arpSync", "SYNC");
-    add (arp, Kind::Choice, "arpDiv", "SYNC RATE");
+    canvas.addChildComponent (about);
+    about.setBounds (0, 0, ui::designW, ui::designH);
 
-    auto& fx = addSection ("EFFECTS", 2);
-    add (fx, Kind::Choice, "fxMode", "MODE");
-    add (fx, Kind::Knob, "fxSpeed", "SPEED/INT");
-
-    auto& wheels = addSection ("WHEELS", 2);
-    add (wheels, Kind::Knob, "bendRange", "BEND RANGE");
-    {
-        auto pw = std::make_unique<PerfWheel> (true);
-        pitchWheel = pw.get();
-        pitchWheel->setTooltip ("Pitch bend: drag up or down; springs back to the centre");
-        pitchWheel->onChange = [this] (float v) { proc.setUiPitchBend (v); };
-        addCustom (wheels, std::move (pw), "PITCH", 0.75f, Kind::Wheel);
-        auto mw = std::make_unique<PerfWheel> (false);
-        modWheel = mw.get();
-        modWheel->setTooltip ("Modulation wheel: adds MG vibrato");
-        modWheel->onChange = [this] (float v) { proc.setUiModWheel (v); };
-        addCustom (wheels, std::move (mw), "MOD", 0.75f, Kind::Wheel);
-    }
-
-    auto& chord = addSection ("CHORD MEMORY", 2);
-    {
-        auto d = std::make_unique<ChordDisplay>();
-        chordDisplay = d.get();
-        addCustom (chord, std::move (d), "STORED CHORD", 2.5f);
-    }
-
-    // program selector
     auto& pm = proc.getPresetManager();
-    prevBtn.onClick    = [this] { proc.getPresetManager().step (-1, favouritesOnly); };
-    nextBtn.onClick    = [this] { proc.getPresetManager().step (+1, favouritesOnly); };
-    nameBtn.onClick    = [this] { showPresetMenu(); };
-    favBtn.onClick     = [this] { auto& m = proc.getPresetManager(); m.toggleFavourite (m.getCurrentKey()); };
-    saveBtn.onClick    = [this] { askSaveName(); };
-    delBtn.onClick     = [this] { askDelete(); };
-    favOnlyBtn.setClickingTogglesState (true);
-    favOnlyBtn.onClick = [this] { favouritesOnly = favOnlyBtn.getToggleState(); updatePresetBar(); };
-    prevBtn.setTooltip ("Previous preset");
-    nextBtn.setTooltip ("Next preset");
-    favBtn.setTooltip ("Add / remove this preset from favourites");
-    favOnlyBtn.setTooltip ("Step through favourites only");
-    for (auto* b : { &prevBtn, &nextBtn, &nameBtn, &favBtn, &saveBtn, &delBtn, &favOnlyBtn }) addAndMakeVisible (b);
     pm.addChangeListener (this);
     pm.refresh();
-    updatePresetBar();
 
-    // size from the widest row
-    int widest = 0;
-    for (int row = 0; row < 3; ++row)
-    {
-        int w = 0;
-        for (auto& s : sections)
-            if (s.row == row)
-            {
-                int cw = 0; for (auto& c : s.ctrls) cw += juce::roundToInt (c->span * kCellW);
-                w += cw + 2 * kSecPad + 10;
-            }
-        widest = juce::jmax (widest, w);
-    }
-    setSize (widest - 10 + 2 * kMargin, kTopH + 3 * (kCellH + kTitleH + 2 * kSecPad) + 2 * kRowGap + 20);
-
-    refreshChordDisplay();
+    refreshChord();
+    refreshButtons();
     pitchWheel->setDisplayValue (proc.getPitchBendDisplay());
     modWheel->setDisplayValue (proc.getModWheelDisplay());
-    startTimerHz (15);
+
+    setResizable (true, true);
+    getConstrainer()->setFixedAspectRatio ((double) ui::designW / (double) ui::designH);
+    setResizeLimits (720, 450, 2160, 1350);
+    setSize (1152, 720);
+    startTimerHz (20);
 }
 
 PolysixEditor::~PolysixEditor()
@@ -255,36 +470,216 @@ PolysixEditor::~PolysixEditor()
     setLookAndFeel (nullptr);
 }
 
-// ---- preset bar -------------------------------------------------------------------------------
-namespace
+void PolysixEditor::setValue (const char* id, float v)
 {
-const juce::String kStar      = juce::String (juce::CharPointer_UTF8 ("\xe2\x98\x85"));
-const juce::String kStarEmpty = juce::String (juce::CharPointer_UTF8 ("\xe2\x98\x86"));
+    if (auto* prm = proc.apvts.getParameter (id))
+    {
+        prm->beginChangeGesture();
+        prm->setValueNotifyingHost (prm->convertTo0to1 (v));
+        prm->endChangeGesture();
+    }
 }
 
-void PolysixEditor::updatePresetBar()
+void PolysixEditor::stepParam (const char* id, int delta)
 {
-    auto& pm = proc.getPresetManager();
-    const bool fav = pm.isFavourite (pm.getCurrentKey());
-    nameBtn.setButtonText (pm.getCurrentName());
-    favBtn.setButtonText (fav ? kStar : kStarEmpty);
-    favBtn.setColour (juce::TextButton::textColourOffId, fav ? juce::Colour (0xffffc83d) : kText);
-    favOnlyBtn.setButtonText (kStar + " ONLY");
-    favOnlyBtn.setToggleState (favouritesOnly, juce::dontSendNotification);
-    delBtn.setEnabled (pm.currentIsUser() && pm.indexOfKey (pm.getCurrentKey()) >= 0);
+    if (auto* prm = proc.apvts.getParameter (id))
+    {
+        const auto range = prm->getNormalisableRange();
+        const float cur = range.convertFrom0to1 (prm->getValue());
+        setValue (id, juce::jlimit (range.start, range.end, std::round (cur) + (float) delta));
+        canvas.repaint();
+    }
 }
 
+ImgButton& PolysixEditor::addButton (const ui::Item& it)
+{
+    const juce::String id (it.id);
+    auto b = std::make_unique<ImgButton> (id);
+    auto& btn = *b;
+    btn.setBounds (boundsOf (it));
+
+    auto toggle = [this, &btn] (const char* pid, const char* tip)
+    {
+        btn.isOn = [this, pid] { return value (pid) > 0.5f; };
+        btn.onClick = [this, pid] { setValue (pid, value (pid) > 0.5f ? 0.0f : 1.0f); refreshButtons(); };
+        btn.setTooltip (tip);
+    };
+
+    if (id == "hold")             toggle ("hold", "Hold: notes keep sounding after you let go (sustain pedal does the same)");
+    else if (id == "glideLegato") toggle ("glideLegato", "Legato: glide only between overlapping notes");
+    else if (id == "arpOn")       toggle ("arpOn", "Arpeggiator on / off");
+    else if (id == "arpLatch")    toggle ("arpLatch", "Latch: the arpeggio keeps running after you let go");
+    else if (id == "arpSync")     toggle ("arpSync", "Sync: follow the DAW tempo, at the SYNC RATE below");
+    else if (id == "memory")
+    {
+        btn.isOn = [this] { return value ("voiceMode") > 1.5f && (flashTicks == 0 || (flashTicks % 2) == 1); };
+        btn.onClick = [this]
+        {
+            proc.requestChordMemory();
+            setValue ("voiceMode", 2.0f);
+            flashTicks = 6;
+        };
+        btn.setTooltip ("Chord Memory: hold a chord and press to store it (switches to Chord mode)");
+    }
+    else if (id.startsWith ("fx"))
+    {
+        const int mode = id.getTrailingIntValue();
+        btn.isOn = [this, mode] { return juce::roundToInt (value ("fxMode")) == mode; };
+        btn.onClick = [this, mode] { setValue ("fxMode", (float) mode); refreshButtons(); };
+        btn.setTooltip ("Effect: Off, Chorus, Phaser or Ensemble");
+    }
+    else if (id == "arpDivDown" || id == "arpDivUp")
+        btn.onClick = [this, d = id.endsWith ("Up") ? 1 : -1] { stepParam ("arpDiv", d); };
+    else if (id == "bendRangeDown" || id == "bendRangeUp")
+        btn.onClick = [this, d = id.endsWith ("Up") ? 1 : -1] { stepParam ("bendRange", d); };
+    else if (id == "presetPrev") { btn.onClick = [this] { proc.getPresetManager().step (-1, favouritesOnly); }; btn.setTooltip ("Previous preset"); }
+    else if (id == "presetNext") { btn.onClick = [this] { proc.getPresetManager().step (+1, favouritesOnly); }; btn.setTooltip ("Next preset"); }
+    else if (id == "presetSave") { btn.onClick = [this] { askSaveName(); }; btn.setTooltip ("Save the current sound as a user preset"); }
+    else if (id == "presetBank") { btn.onClick = [this] { showPresetMenu(); }; btn.setTooltip ("Preset browser: Favourites, Factory and User"); }
+    else if (id == "presetFav")
+    {
+        btn.isOn = [this] { auto& m = proc.getPresetManager(); return m.isFavourite (m.getCurrentKey()); };
+        btn.onClick = [this] { auto& m = proc.getPresetManager(); m.toggleFavourite (m.getCurrentKey()); refreshButtons(); };
+        btn.setTooltip ("Add / remove this preset from favourites");
+    }
+
+    canvas.addAndMakeVisible (btn);
+    buttons.push_back (&btn);
+    others.push_back (std::move (b));
+    return btn;
+}
+
+void PolysixEditor::refreshButtons()
+{
+    for (auto* b : buttons) b->refresh();
+}
+
+void PolysixEditor::refreshChord()
+{
+    int iv[p6::kNumVoices]; int root = 60;
+    const int n = proc.getChord (iv, root);
+    juce::StringArray parts;
+    for (int i = 0; i < n; ++i) parts.add (noteName (root + iv[i]));
+    const auto name = chordName (iv, n, root);
+    const auto notes = parts.joinIntoString (" ");
+    if (name != chordNameText || notes != chordNotesText)
+    {
+        chordNameText = name; chordNotesText = notes;
+        canvas.repaint (chordR.getSmallestIntegerContainer().expanded (4));
+    }
+}
+
+void PolysixEditor::timerCallback()
+{
+    if (flashTicks > 0) --flashTicks;
+    refreshButtons();
+    pitchWheel->setDisplayValue (proc.getPitchBendDisplay());
+    modWheel->setDisplayValue (proc.getModWheelDisplay());
+
+    const int v = proc.getChordVersion();
+    if (v != lastChordVersion) { lastChordVersion = v; refreshChord(); }
+
+    // displays follow automation and preset changes
+    const float now[4] = { value ("arpDiv"), value ("bendRange"), value ("arpSync"), value ("voiceMode") };
+    bool changed = false;
+    for (int i = 0; i < 4; ++i) if (now[i] != lastShown[i]) { lastShown[i] = now[i]; changed = true; }
+    if (changed) canvas.repaint();
+}
+
+void PolysixEditor::paint (juce::Graphics& g)
+{
+    g.fillAll (juce::Colour (0xffd6d6d4));
+}
+
+void PolysixEditor::resized()
+{
+    const float scale = (float) getWidth() / (float) ui::designW;
+    canvas.setBounds (0, 0, ui::designW, ui::designH);
+    canvas.setTransform (juce::AffineTransform::scale (scale));
+}
+
+void PanelCanvas::paint (juce::Graphics& g)
+{
+    auto& e = editor;
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (e.background, getLocalBounds().toFloat(), juce::RectanglePlacement::stretchToFit);
+
+    auto mono = [&] (float size) { return e.monoFace != nullptr ? juce::Font (juce::FontOptions (e.monoFace).withHeight (size))
+                                                                 : juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), size, juce::Font::bold)); };
+    auto glowText = [&] (const juce::String& s, juce::Rectangle<float> r, juce::Font f, juce::Colour c, juce::Justification j)
+    {
+        g.setFont (f);
+        g.setColour (c.withAlpha (0.18f));
+        for (auto d : { juce::Point<float> (-1.2f, 0), juce::Point<float> (1.2f, 0), juce::Point<float> (0, -1.2f), juce::Point<float> (0, 1.2f) })
+            g.drawText (s, r.translated (d.x, d.y), j, false);
+        g.setColour (c);
+        g.drawText (s, r, j, false);
+    };
+
+    // preset display
+    {
+        auto& pm = e.proc.getPresetManager();
+        const auto key = pm.getCurrentKey();
+        const int idx = pm.indexOfKey (key);
+        juce::String num;
+        if (idx >= 0)
+        {
+            int n = 0;
+            for (int i = 0; i <= idx; ++i) if (pm.getEntries()[(size_t) i].factory == pm.getEntries()[(size_t) idx].factory) ++n;
+            num = juce::String (n).paddedLeft ('0', 2) + " ";
+        }
+        const juce::String txt = (pm.currentIsUser() ? "USER " : "FACTORY ") + num + pm.getCurrentName().toUpperCase();
+        auto f = mono (21.0f);
+        g.saveState();
+        g.reduceClipRegion (e.presetR.reduced (6.0f, 4.0f).getSmallestIntegerContainer());
+        glowText (txt, e.presetR.reduced (12.0f, 2.0f), f, kAmber, juce::Justification::centredLeft);
+        if (e.favouritesOnly)
+            glowText (kStar + " ONLY", e.presetR.reduced (10.0f, 2.0f), mono (12.0f), kAmber.withAlpha (0.8f), juce::Justification::centredRight);
+        g.restoreState();
+    }
+
+    // stored chord: bright in Chord mode, dim otherwise
+    {
+        const bool chordMode = e.value ("voiceMode") > 1.5f;
+        const auto c = kAmber.withAlpha (chordMode ? 1.0f : 0.4f);
+        auto r = e.chordR.reduced (8.0f, 5.0f);
+        glowText (e.chordNameText, r.removeFromTop (r.getHeight() * 0.58f), mono (22.0f), c, juce::Justification::centredLeft);
+        g.setColour (c);
+        g.setFont (mono (11.0f));
+        g.drawFittedText (e.chordNotesText, r.getSmallestIntegerContainer(), juce::Justification::centredLeft, 1, 0.6f);
+    }
+
+    // arpeggiator sync rate (dim while SYNC is off) and bend range
+    {
+        juce::String div = "1/16";
+        if (auto* prm = dynamic_cast<juce::AudioParameterChoice*> (e.proc.apvts.getParameter ("arpDiv")))
+            div = prm->getCurrentChoiceName();
+        glowText (div, e.arpDivR, mono (21.0f), kRed.withAlpha (e.value ("arpSync") > 0.5f ? 1.0f : 0.35f), juce::Justification::centred);
+        glowText ("BEND " + juce::String (juce::roundToInt (e.value ("bendRange"))), e.bendR, mono (19.0f), kRed, juce::Justification::centred);
+    }
+
+    // credit line between the preset strip and the logo
+    {
+        g.setColour (kCreamDim);
+        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+        g.drawText ("PROGRAMMABLE 12 VOICE SYNTHESIZER", e.infoR.removeFromTop (17.0f), juce::Justification::centredRight);
+        g.setColour (kCreamDim.withAlpha (0.8f));
+        g.drawText (juce::String (juce::CharPointer_UTF8 ("TICCO ROSS  \xc2\xb7  v")) + JucePlugin_VersionString,
+                    e.infoR, juce::Justification::centredRight);
+    }
+}
+
+// ---- presets ---------------------------------------------------------------------------------
 void PolysixEditor::showPresetMenu()
 {
     auto& pm = proc.getPresetManager();
     pm.refresh();
-    updatePresetBar();
     const auto& entries = pm.getEntries();
     const auto current = pm.getCurrentKey();
 
     juce::PopupMenu menu;
     static constexpr int favBase = 10000;
-    auto label = [&] (const PresetManager::Entry& e) { return (pm.isFavourite (e.key) ? kStar + " " : juce::String()) + e.name; };
+    auto label = [&] (const PresetManager::Entry& en) { return (pm.isFavourite (en.key) ? kStar + " " : juce::String()) + en.name; };
 
     if (pm.hasFavourites())
     {
@@ -305,18 +700,26 @@ void PolysixEditor::showPresetMenu()
 
     menu.addSeparator();
     menu.addItem (90001, "Save As...");
+    menu.addItem (90004, "Delete \"" + pm.getCurrentName() + "\"...", pm.currentIsUser() && pm.indexOfKey (current) >= 0);
+    menu.addItem (90005, "Step Through Favourites Only", true, favouritesOnly);
+    menu.addSeparator();
     menu.addItem (90002, "Open Preset File...");
     menu.addItem (90003, "Show Preset Folder");
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&nameBtn),
+    const auto anchor = findItem ("presetBank");
+    juce::Rectangle<int> target = anchor != nullptr ? canvas.localAreaToGlobal (boundsOf (*anchor)) : getScreenBounds();
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (target).withParentComponent (nullptr),
         [this] (int r)
         {
             auto& m = proc.getPresetManager();
             if (r == 90001)      askSaveName();
             else if (r == 90002) openPresetFile();
             else if (r == 90003) { m.getUserDir().createDirectory(); m.getUserDir().revealToUser(); }
+            else if (r == 90004) askDelete();
+            else if (r == 90005) { favouritesOnly = ! favouritesOnly; canvas.repaint(); }
             else if (r >= favBase) m.load (r - favBase);
             else if (r > 0)        m.load (r - 1);
+            refreshButtons();
         });
 }
 
@@ -376,325 +779,4 @@ void PolysixEditor::openPresetFile()
                               const auto f = fc.getResult();
                               if (safe != nullptr && f.existsAsFile()) safe->proc.getPresetManager().loadFile (f);
                           });
-}
-
-PolysixEditor::Section& PolysixEditor::addSection (const juce::String& title, int row)
-{
-    sections.push_back ({ title, row, {}, {} });
-    return sections.back();
-}
-
-void PolysixEditor::add (Section& s, Kind kind, const juce::String& id, const juce::String& label, float span)
-{
-    auto c = std::make_unique<Ctrl>();
-    c->kind = kind; c->paramId = id; c->label = label; c->span = span;
-    auto& st = proc.apvts;
-
-    if (kind == Kind::Knob)
-    {
-        auto sl = std::make_unique<juce::Slider> (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox);
-        sl->setPopupDisplayEnabled (true, true, this);
-        sl->setRotaryParameters (juce::degreesToRadians (-135.0f), juce::degreesToRadians (135.0f), true);
-        c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (st, id, *sl);
-        if (auto* prm = st.getParameter (id)) sl->setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
-        c->comp = std::move (sl);
-    }
-    else if (kind == Kind::Choice)
-    {
-        auto cb = std::make_unique<juce::ComboBox>();
-        if (auto* prm = dynamic_cast<juce::AudioParameterChoice*> (st.getParameter (id)))
-            cb->addItemList (prm->choices, 1);
-        c->cAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (st, id, *cb);
-        c->comp = std::move (cb);
-    }
-    else
-    {
-        auto tb = std::make_unique<juce::ToggleButton>();
-        c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (st, id, *tb);
-        c->comp = std::move (tb);
-    }
-    addAndMakeVisible (*c->comp);
-    s.ctrls.push_back (std::move (c));
-}
-
-void PolysixEditor::addCustom (Section& s, std::unique_ptr<juce::Component> comp, const juce::String& label, float span, Kind kind)
-{
-    auto c = std::make_unique<Ctrl>();
-    c->kind = kind; c->label = label; c->span = span;
-    c->comp = std::move (comp);
-    addAndMakeVisible (*c->comp);
-    s.ctrls.push_back (std::move (c));
-}
-
-void PolysixEditor::resized()
-{
-    int y = kTopH;
-    for (int row = 0; row < 3; ++row)
-    {
-        int x = kMargin;
-        const int secH = kCellH + kTitleH + 2 * kSecPad;
-        for (auto& s : sections)
-        {
-            if (s.row != row) continue;
-            int cw = 0; for (auto& c : s.ctrls) cw += juce::roundToInt (c->span * kCellW);
-            const int w = cw + 2 * kSecPad;
-            s.bounds = { x, y, w, secH };
-            int cx = x + kSecPad;
-            for (auto& c : s.ctrls)
-            {
-                const int cellW = juce::roundToInt (c->span * kCellW);
-                c->cell = { cx, y + kSecPad, cellW, kCellH };
-                auto area = c->cell.withTrimmedBottom (22);
-                if (c->kind == Kind::Knob)        c->comp->setBounds (area.withSizeKeepingCentre (64, 64));
-                else if (c->kind == Kind::Choice) c->comp->setBounds (area.withSizeKeepingCentre (kCellW - 4, 24));
-                else if (c->kind == Kind::Wheel)  c->comp->setBounds (area.withSizeKeepingCentre (28, 66));
-                else if (c->span > 1.0f)          c->comp->setBounds (area.reduced (6, 6));
-                else                              c->comp->setBounds (area.withSizeKeepingCentre (40, 32));
-                cx += cellW;
-            }
-            x += w + 10;
-        }
-        y += secH + kRowGap;
-    }
-    // preset bar, right-aligned in the header
-    auto bar = juce::Rectangle<int> (getWidth() - kMargin - 520, 10, 520, 24);
-    favOnlyBtn.setBounds (bar.removeFromRight (64)); bar.removeFromRight (6);
-    delBtn.setBounds (bar.removeFromRight (44));     bar.removeFromRight (4);
-    saveBtn.setBounds (bar.removeFromRight (52));    bar.removeFromRight (10);
-    favBtn.setBounds (bar.removeFromRight (30));     bar.removeFromRight (4);
-    nextBtn.setBounds (bar.removeFromRight (26));    bar.removeFromRight (2);
-    prevBtn.setBounds (bar.removeFromLeft (26));     bar.removeFromLeft (2);
-    nameBtn.setBounds (bar);
-}
-
-void PolysixEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (kPanel);
-
-    // wooden end cheeks
-    juce::ColourGradient wood (kWood.brighter (0.25f), 0, 0, kWood.darker (0.4f), 0, (float) getHeight(), false);
-    g.setGradientFill (wood);
-    g.fillRect (0, 0, 18, getHeight());
-    g.fillRect (getWidth() - 18, 0, 18, getHeight());
-
-    // header
-    g.setColour (kText);
-    g.setFont (juce::Font (juce::FontOptions (22.0f, juce::Font::bold)));
-    const juce::Font titleFont (juce::FontOptions (22.0f, juce::Font::bold));
-    g.setFont (titleFont);
-    g.drawText ("POLYTWELVE", kMargin, 8, 400, 28, juce::Justification::centredLeft);
-    const int titleW = (int) std::ceil (juce::GlyphArrangement::getStringWidth (titleFont, "POLYTWELVE"));
-
-    // build version, right after the name
-    const juce::Font versionFont (juce::FontOptions (11.0f, juce::Font::bold));
-    const juce::String version = juce::String ("v") + JucePlugin_VersionString;
-    const int versionX = kMargin + titleW + 8;
-    const int versionW = (int) std::ceil (juce::GlyphArrangement::getStringWidth (versionFont, version)) + 10;
-    g.setColour (kLine);
-    g.fillRoundedRectangle ((float) versionX, 15.0f, (float) versionW, 16.0f, 3.0f);
-    g.setColour (kText.withAlpha (0.85f));
-    g.setFont (versionFont);
-    g.drawText (version, versionX, 15, versionW, 16, juce::Justification::centred);
-    g.setFont (juce::Font (juce::FontOptions (11.0f)));
-    g.setColour (kText.withAlpha (0.6f));
-    g.drawText (juce::String (juce::CharPointer_UTF8 ("PROGRAMMABLE 12 VOICE SYNTH  \xc2\xb7  TICCO ROSS 2026")), versionX + versionW + 14, 14, 380, 20,
-                juce::Justification::centredLeft);
-
-    for (auto& s : sections)
-    {
-        g.setColour (kPanelDark);
-        g.fillRoundedRectangle (s.bounds.toFloat(), 5.0f);
-        g.setColour (kLine);
-        g.drawRoundedRectangle (s.bounds.toFloat().reduced (0.5f), 5.0f, 1.0f);
-
-        g.setColour (kText);
-        g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
-        g.drawText (s.title, s.bounds.withTop (s.bounds.getBottom() - kTitleH - 4), juce::Justification::centred);
-
-        g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
-        g.setColour (kText.withAlpha (0.9f));
-        for (auto& c : s.ctrls)
-            g.drawText (c->label, c->cell.withTop (c->cell.getBottom() - 20), juce::Justification::centred);
-    }
-}
-
-// ---- chord memory UI ----------------------------------------------------------------------------
-void LedButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
-{
-    auto area = getLocalBounds().toFloat();
-    auto sw = juce::Rectangle<float> (0, 0, 30.0f, 22.0f).withCentre (area.getCentre()).translated (0.0f, down ? 1.0f : 0.0f);
-    g.setColour (juce::Colours::black.withAlpha (down ? 0.2f : 0.35f));
-    g.fillRoundedRectangle (sw.translated (1.0f, down ? 1.0f : 2.0f), 3.0f);
-    g.setColour (highlighted ? juce::Colour (0xffffffff) : juce::Colour (0xffe4e6ec));
-    g.fillRoundedRectangle (sw, 3.0f);
-    const auto led = juce::Rectangle<float> (0, 0, 8.0f, 8.0f).withCentre (sw.getCentre());
-    g.setColour (lit ? kLed : juce::Colour (0xff5a2420));
-    g.fillEllipse (led);
-    if (lit) { g.setColour (kLed.withAlpha (0.35f)); g.fillEllipse (led.expanded (3.0f)); }
-}
-
-void ChordDisplay::set (const juce::String& nameText, const juce::String& notesText, bool isActive)
-{
-    if (nameText == name && notesText == notes && isActive == active) return;
-    name = nameText; notes = notesText; active = isActive;
-    repaint();
-}
-
-void ChordDisplay::paint (juce::Graphics& g)
-{
-    const auto r = getLocalBounds().toFloat();
-    g.setColour (juce::Colour (0xff0b0d18));
-    g.fillRoundedRectangle (r, 4.0f);
-    g.setColour (kLine);
-    g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
-
-    const auto amber = juce::Colour (0xffffb23e).withAlpha (active ? 1.0f : 0.45f);
-    auto inner = getLocalBounds().reduced (10, 6);
-    g.setColour (amber);
-    g.setFont (juce::Font (juce::FontOptions (24.0f, juce::Font::bold)));
-    g.drawText (name, inner.removeFromTop (inner.getHeight() / 2 + 4), juce::Justification::centredLeft);
-    g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
-    g.drawFittedText (notes, inner, juce::Justification::centredLeft, 2, 0.8f);
-}
-
-namespace
-{
-// Ableton convention: MIDI 60 = C3
-juce::String noteName (int midi)
-{
-    static const char* names[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
-    return juce::String (names[((midi % 12) + 12) % 12]) + juce::String (midi / 12 - 2);
-}
-
-juce::String pitchClass (int pc)
-{
-    static const char* names[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
-    return names[((pc % 12) + 12) % 12];
-}
-
-// Name a chord from its notes; tries every note as the root and adds "/bass" for inversions
-juce::String chordName (const int* intervals, int n, int bass)
-{
-    struct Shape { std::vector<int> pcs; const char* suffix; };
-    static const std::vector<Shape> shapes {
-        { { 0, 4, 7 }, "" },        { { 0, 3, 7 }, "m" },        { { 0, 3, 6 }, "dim" },     { { 0, 4, 8 }, "aug" },
-        { { 0, 2, 7 }, "sus2" },    { { 0, 5, 7 }, "sus4" },     { { 0, 7 }, "5" },
-        { { 0, 4, 7, 10 }, "7" },   { { 0, 4, 7, 11 }, "maj7" }, { { 0, 3, 7, 10 }, "m7" },  { { 0, 3, 6, 10 }, "m7b5" },
-        { { 0, 3, 6, 9 }, "dim7" }, { { 0, 4, 7, 9 }, "6" },     { { 0, 3, 7, 9 }, "m6" },   { { 0, 3, 7, 11 }, "mMaj7" },
-        { { 0, 5, 7, 10 }, "7sus4" },
-        { { 0, 2, 4, 7 }, "add9" }, { { 0, 2, 3, 7 }, "m(add9)" },
-        { { 0, 2, 4, 7, 10 }, "9" }, { { 0, 2, 4, 7, 11 }, "maj9" }, { { 0, 2, 3, 7, 10 }, "m9" },
-        { { 0, 3, 5, 7, 10 }, "m11" }, { { 0, 2, 3, 5, 7, 10 }, "m11" }, { { 0, 4, 7, 9, 2 }, "6/9" },
-    };
-
-    std::vector<int> pcs;
-    for (int i = 0; i < n; ++i) { const int pc = (intervals[i] % 12 + 12) % 12; if (std::find (pcs.begin(), pcs.end(), pc) == pcs.end()) pcs.push_back (pc); }
-    std::sort (pcs.begin(), pcs.end());
-    if (pcs.size() == 1) return noteName (bass) + (n > 1 ? " oct" : "");
-
-    for (int rootPc : pcs) // pcs relative to the bass; try each as root
-    {
-        std::vector<int> rel;
-        for (int pc : pcs) rel.push_back (((pc - rootPc) % 12 + 12) % 12);
-        std::sort (rel.begin(), rel.end());
-        for (const auto& s : shapes)
-        {
-            auto want = s.pcs; std::sort (want.begin(), want.end());
-            if (want == rel)
-            {
-                juce::String nm = pitchClass (bass + rootPc) + s.suffix;
-                if (rootPc != 0) nm << "/" << pitchClass (bass);
-                return nm;
-            }
-        }
-    }
-    return juce::String (n) + "-note chord";
-}
-} // namespace
-
-void PolysixEditor::refreshChordDisplay()
-{
-    int iv[p6::kNumVoices]; int root = 60;
-    const int n = proc.getChord (iv, root);
-    juce::StringArray parts;
-    for (int i = 0; i < n; ++i) parts.add (noteName (root + iv[i]));
-    const bool chordMode = proc.apvts.getRawParameterValue ("voiceMode")->load() > 1.5f;
-    if (flashTicks == 0) memoryBtn->setLit (chordMode);
-    chordDisplay->set (chordName (iv, n, root), parts.joinIntoString (juce::String (juce::CharPointer_UTF8 ("  \xc2\xb7  "))), chordMode);
-}
-
-void PolysixEditor::timerCallback()
-{
-    const bool chordMode = proc.apvts.getRawParameterValue ("voiceMode")->load() > 1.5f;
-    if (flashTicks > 0) --flashTicks;
-    memoryBtn->setLit (chordMode && (flashTicks == 0 || (flashTicks % 2) == 1));
-
-    pitchWheel->setDisplayValue (proc.getPitchBendDisplay());
-    modWheel->setDisplayValue (proc.getModWheelDisplay());
-
-    const int v = proc.getChordVersion();
-    if (v != lastChordVersion) { lastChordVersion = v; refreshChordDisplay(); }
-    else refreshChordDisplay(); // cheap: only repaints when text/state changed
-}
-
-// ---- performance wheels -------------------------------------------------------------------------
-void PerfWheel::set (float v)
-{
-    v = juce::jlimit (spring ? -1.0f : 0.0f, 1.0f, v);
-    if (v == value) return;
-    value = v;
-    if (onChange) onChange (value);
-    repaint();
-}
-
-void PerfWheel::mouseDown (const juce::MouseEvent&) { dragging = true; startValue = value; }
-
-void PerfWheel::mouseDrag (const juce::MouseEvent& e)
-{
-    const float travel = (float) getHeight() * 0.85f;
-    set (startValue - (float) e.getDistanceFromDragStartY() / travel * (spring ? 2.0f : 1.0f));
-}
-
-void PerfWheel::mouseUp (const juce::MouseEvent&)
-{
-    dragging = false;
-    if (spring) set (0.0f);
-}
-
-void PerfWheel::paint (juce::Graphics& g)
-{
-    const auto slot = getLocalBounds().toFloat();
-    g.setColour (juce::Colour (0xff0b0d18));
-    g.fillRoundedRectangle (slot, 4.0f);
-    g.setColour (kLine);
-    g.drawRoundedRectangle (slot.reduced (0.5f), 4.0f, 1.0f);
-
-    // the wheel: shaded like a cylinder, ribs move as it turns
-    const auto wheel = slot.reduced (4.0f, 3.0f);
-    juce::ColourGradient shade (juce::Colour (0xff23283d), wheel.getX(), wheel.getY(),
-                                juce::Colour (0xff23283d), wheel.getX(), wheel.getBottom(), false);
-    shade.addColour (0.5, juce::Colour (0xff4a5274));
-    g.setGradientFill (shade);
-    g.fillRoundedRectangle (wheel, 3.0f);
-
-    g.saveState();
-    g.reduceClipRegion (wheel.toNearestInt());
-    const float pitch = 5.0f, offset = std::fmod (value * 23.0f + 100.0f * pitch, pitch);
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    for (float y = wheel.getY() - pitch + offset; y < wheel.getBottom() + pitch; y += pitch)
-        g.drawHorizontalLine ((int) y, wheel.getX() + 1.0f, wheel.getRight() - 1.0f);
-    g.restoreState();
-
-    const float travel = wheel.getHeight() - 10.0f;
-    const float yMark = spring ? wheel.getCentreY() - value * travel * 0.5f
-                               : wheel.getBottom() - 5.0f - value * travel;
-
-    if (spring) // centre detent marks
-    {
-        g.setColour (kText.withAlpha (0.5f));
-        g.drawHorizontalLine ((int) wheel.getCentreY(), slot.getX() + 1.0f, wheel.getX());
-        g.drawHorizontalLine ((int) wheel.getCentreY(), wheel.getRight(), slot.getRight() - 1.0f);
-    }
-    g.setColour (juce::Colours::white.withAlpha (0.92f));
-    g.fillRoundedRectangle (wheel.getX() + 1.0f, yMark - 1.5f, wheel.getWidth() - 2.0f, 3.0f, 1.0f);
 }
