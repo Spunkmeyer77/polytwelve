@@ -39,7 +39,7 @@ public:
 
     // full sound state (parameters + chord memory) for presets and host sessions
     juce::ValueTree captureState();
-    void restoreState (const juce::ValueTree& tree);
+    void restoreState (const juce::ValueTree& source, bool keepModel = false);
 
     PresetManager& getPresetManager() { return *presets; }
 
@@ -69,7 +69,7 @@ private:
                            *mgFreq, *mgDelay, *mgLevel, *mgMode,
                            *voiceMode, *hold, *analog, *detune, *bendRange, *glide, *glideLegato,
                            *arpOn, *arpSpeed, *arpRange, *arpMode, *arpLatch, *arpSync, *arpDiv,
-                           *fxMode, *fxSpeed;
+                           *fxMode, *fxSpeed, *model;
     } raw {};
 
     void pullParams();

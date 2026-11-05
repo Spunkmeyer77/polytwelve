@@ -242,7 +242,33 @@ def build():
           table([["Control", "Range", "What it does"],
                  ["VOLUME", "0\u201310 (default 7.5)", "Overall output level, after the effects."],
                  ["TUNE", "\u00b1100 cents (\u22125 to +5 on the scale)", "Fine-tunes all voices by up to one semitone either way."],
-                 ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."]], [28, 42, 100])]
+                 ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."],
+                 ["MODEL", "CLASSIC \u00b7 POLYSIX", "Which sound engine plays: see the next chapter."]], [28, 42, 100])]
+
+    s += [Paragraph("Sound engine: MODEL", h1),
+          Paragraph("Polytwelve has two sound engines, picked with the MODEL switch in the MASTER section. Every preset plays "
+                    "on both, so you can flip the switch and compare. MODEL belongs to the instrument, not to a sound: changing "
+                    "preset keeps it, and your project remembers it.", body),
+          bullets(["<b>CLASSIC</b> is the original Polytwelve engine, ported from the Polysix 2 Reaktor ensemble, with its "
+                   "ladder filter and stereo effects. It is unchanged from earlier versions.",
+                   "<b>POLYSIX</b> is built from the Korg Polysix service manual (circuit diagrams KLM-366 and KLM-368, "
+                   "and the factory adjustment procedure)."]),
+          Paragraph("What POLYSIX changes", h2),
+          table([["Part", "POLYSIX model"],
+                 ["Filter", "An SSM2044 model, the chip on the Polysix voice board: four transconductance stages that each "
+                            "saturate softly, and a saturating resonance loop. At RESONANCE 10 it settles into a clean sine. The "
+                            "bass thins as resonance rises, as on the original, so very resonant sounds play quieter."],
+                 ["Cutoff", "Spans about 15 Hz to 21 kHz (factory spec: 10\u201325 Hz to 19\u201324 kHz)."],
+                 ["KBD TRACK", "Reaches 150% at 10, as the factory spec gives."],
+                 ["MG", "FREQUENCY from a 25-second cycle up to 50 Hz (about 7 Hz at 4); DELAY up to about 10 s."],
+                 ["PWM SPEED", "Up to 20 Hz."],
+                 ["Effects", "Modelled on the KLM-368 effect board: bucket-brigade (MN3004) delay lines with their filters, "
+                             "soft compander saturation and a little noise; mono, like the Polysix output. CHORUS: one delay, "
+                             "2\u20134 ms. PHASE: a short swept delay (0.5\u20132.6 ms) with feedback, as on the original, "
+                             "which is a flanging sound rather than a phaser. ENSEMBLE: three delays driven by a slow and a fast "
+                             "modulation, 120\u00b0 apart."]], [28, 142]),
+          Paragraph("The POLYSIX model will be refined against recordings of a real Polysix. CLASSIC stays as it is, so you can "
+                    "always go back to it.", small)]
 
     s += [PageBreak(), Paragraph("9. Presets", h1),
           Paragraph("A preset stores every control plus the stored chord. The amber display shows the bank (FACTORY or USER), "

@@ -1,6 +1,6 @@
 # Polytwelve
 
-Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026. Version 0.6.0.
+Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026. Version 0.7.0.
 
 ![Polytwelve panel](docs/panel.jpg)
 

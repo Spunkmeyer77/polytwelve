@@ -61,10 +61,11 @@ inline constexpr Item items[] = {
     { Kind::Button, "fx2", 897.0f, 604.0f, 108.0f, 79.3f, 0, 108.0f },
     { Kind::Button, "fx3", 1017.0f, 604.0f, 108.0f, 79.3f, 0, 108.0f },
     { Kind::Knob, "fxSpeed", 980.0f, 735.0f, 62.0f, 62.0f, 0, 62.0f },
-    { Kind::Knob, "volume", 1192.1f, 567.0f, 62.0f, 62.0f, 0, 62.0f },
-    { Kind::Knob, "tune", 1303.9f, 567.0f, 62.0f, 62.0f, 0, 62.0f },
-    { Kind::Display, "bendRange", 1227.0f, 724.0f, 104.0f, 36.0f, 1, 104.0f },
-    { Kind::Button, "bendRangeDown", 1187.0f, 728.0f, 46.0f, 30.1f, 0, 46.0f },
-    { Kind::Button, "bendRangeUp", 1325.0f, 728.0f, 46.0f, 30.1f, 0, 46.0f },
+    { Kind::Knob, "volume", 1192.1f, 555.0f, 62.0f, 62.0f, 0, 62.0f },
+    { Kind::Knob, "tune", 1303.9f, 555.0f, 62.0f, 62.0f, 0, 62.0f },
+    { Kind::Display, "bendRange", 1227.0f, 684.0f, 104.0f, 34.0f, 1, 104.0f },
+    { Kind::Button, "bendRangeDown", 1187.0f, 687.0f, 46.0f, 30.1f, 0, 46.0f },
+    { Kind::Button, "bendRangeUp", 1325.0f, 687.0f, 46.0f, 30.1f, 0, 46.0f },
+    { Kind::Switch, "model", 1231.5f, 783.0f, 27.1f, 46.0f, 2, 74.6f },
 };
 } // namespace ui

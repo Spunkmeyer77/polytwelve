@@ -106,7 +106,7 @@ bool PresetManager::loadFile (const juce::File& file)
     if (xml == nullptr || ! xml->hasTagName ("PolysixPreset")) return false;
     auto* stateXml = xml->getChildByName (proc.apvts.state.getType());
     if (stateXml == nullptr) return false;
-    proc.restoreState (juce::ValueTree::fromXml (*stateXml));
+    proc.restoreState (juce::ValueTree::fromXml (*stateXml), true);
 
     // a file opened from elsewhere is shown by its name (save it to keep it in the list)
     currentKey = "U:" + file.getFileNameWithoutExtension();

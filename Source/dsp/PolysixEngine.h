@@ -104,6 +104,7 @@ struct Params
     int   arpDiv   = 3;        // index into kArpDivBeats
     // Effects
     int   fxMode  = 0;         // 0=Off 1=Chorus 2=Phaser 3=Ensemble
+    int   model   = 0;         // 0=Classic (the Reaktor port), 1=Polysix (from the service manual)
     float fxSpeed = 0.4f;      // 0..1 speed (chorus/phaser) or intensity (ensemble)
 };
 
@@ -119,6 +120,19 @@ inline float mgKnobToHz (float k)
         if (k <= xs[i + 1])
             return ys[i] + (ys[i + 1] - ys[i]) * (k - xs[i]) / (xs[i + 1] - xs[i]);
     return 20.0f;
+}
+
+// Polysix MG curve, from the service manual: FREQUENCY 0 = a 10-40 s cycle, 4 = about 7 Hz
+// (fig. 3: 100-200 ms), 10 = 50 Hz (fig. 2). Interpolated in log frequency.
+inline float mgKnobToHzPolysix (float k)
+{
+    static constexpr float xs[] = { 0.0f, 0.4f, 0.7f, 1.0f };
+    static constexpr float ys[] = { 0.04f, 7.0f, 20.0f, 50.0f };
+    k = clampf (k, 0.0f, 1.0f);
+    for (int i = 0; i < 3; ++i)
+        if (k <= xs[i + 1])
+            return ys[i] * std::pow (ys[i + 1] / ys[i], (k - xs[i]) / (xs[i + 1] - xs[i]));
+    return 50.0f;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -193,6 +207,58 @@ struct Ladder
 };
 
 // ---------------------------------------------------------------------------------------------
+// VCF type 2: SSM2044, as on the Polysix voice board (KLM-366, IC32).
+// The chip is four transconductance-capacitor stages in cascade. Each stage is a differential
+// pair, so it integrates tanh of (its input - its output): a soft, level-dependent slew that
+// rounds edges without the "tanh on every voltage" fizz of a generic ladder. Resonance is an
+// external VCA feeding the 4th output back to the input; it saturates too, so at 10 the filter
+// settles into a clean, stable sine instead of growing. Nothing compensates the passband: the
+// bass thins as resonance rises, as on the Polysix. Runs 2x oversampled.
+struct Ssm2044
+{
+    float y[4] = { 0, 0, 0, 0 };
+    float y4prev = 0.0f, xPrev = 0.0f;
+
+    void reset() { y[0] = y[1] = y[2] = y[3] = 0.0f; y4prev = xPrev = 0.0f; }
+
+    // x: voice signal (about +/-0.6); fcHz: cutoff; res: 0..1 (the RESONANCE knob); sr: base rate
+    float process (float x, float fcHz, float res, float sr)
+    {
+        constexpr float kPiF = 3.14159265358979f;
+        const float srOS = 2.0f * sr;
+        fcHz = std::min (fcHz, 0.42f * sr);
+        // stage coefficient with a little pre-warp so resonance stays in tune near the top
+        const float wc = 2.0f * kPiF * fcHz / srOS;
+        // tuning: the explicit integrators and the averaged feedback make the loop run flat,
+        // so the coefficient is scaled (measured, see tests/ssm2044) to put the peak on fcHz
+        const float g  = std::min (0.98f, 1.0f - std::exp (-wc * 1.21f));
+        // resonance law: the Polysix pot gives a gentle start and reaches self-oscillation near 9.5;
+        // the loop loses gain at high cutoffs, which the k boost makes up
+        const float k = 4.6f * res * (0.55f + 0.45f * res) * (1.0f + wc * wc);
+
+        constexpr float drive = 1.6f;   // VCO level into the chip: mild saturation on full saws
+        float out = 0.0f;
+        for (int n = 0; n < 2; ++n)
+        {
+            const float xin = (n == 0 ? 0.5f * (xPrev + x) : x) * drive;
+            // half-sample feedback average keeps the resonant peak where it should be
+            const float fb = 0.5f * (y[3] + y4prev);
+            y4prev = y[3];
+            const float u = xin - k * std::tanh (fb);
+            float prev = u;
+            for (int i = 0; i < 4; ++i)
+            {
+                y[i] += g * std::tanh (prev - y[i]);
+                prev = y[i];
+            }
+            out += y[3];
+        }
+        xPrev = x;
+        return 0.5f * out / drive;
+    }
+};
+
+// ---------------------------------------------------------------------------------------------
 // Analog-style ADSR (exponential segments, retriggers from current level)
 struct Adsr
 {
@@ -236,6 +302,7 @@ struct Voice
 
     Vco    vco;
     Ladder vcf;
+    Ssm2044 ssm;
     Adsr   eg;
     float  gateSlew = 0.0f;  // VCA gate mode (slew-limited gate)
     float  pitchNow = 60.0f; // glided note pitch (semitones)
@@ -256,7 +323,7 @@ struct Voice
     // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
     void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
-        if (! active) { vcf.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
+        if (! active) { vcf.reset(); ssm.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
         pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
         eg.gateOn();
@@ -305,6 +372,7 @@ struct Effects
     {
         sr = sampleRate;
         dl.prepare ((int) (0.08f * sr) + 8);
+        for (auto& b : bbd) b.prepare ((int) (0.012f * sr) + 8);
         reset();
     }
     void reset()
@@ -318,6 +386,91 @@ struct Effects
         const float y = a * x + z;
         z = x - a * y;
         return y;
+    }
+
+    // ---- Polysix effect board (KLM-368): three MN3004 bucket brigades (512 stages, so delay =
+    // 256 clock periods), NE571 companders and RC filters around them; mono output.
+    // Clock ranges from the adjustment procedure: Chorus 8-22 us, Phase 1-12 us, Ensemble 4-30 us.
+    DelayLine bbd[3];
+    float pre1 = 0, pre2 = 0, post[3][2] = {}, bbdFb = 0, slow = 0, fast = 0;
+    uint32_t noiseSeed = 0x2545F491u;
+
+    float bbdFilter (float x, float* z) // reconstruction filter: two poles at ~9 kHz
+    {
+        const float a = 1.0f - std::exp (-kTwoPi * 9000.0f / sr);
+        z[0] += (x - z[0]) * a; z[1] += (z[0] - z[1]) * a;
+        return z[1];
+    }
+    float bbdNoise()
+    {
+        noiseSeed ^= noiseSeed << 13; noiseSeed ^= noiseSeed >> 17; noiseSeed ^= noiseSeed << 5;
+        return ((float) (noiseSeed >> 8) * (1.0f / 8388608.0f) - 1.0f) * 0.0004f; // about -70 dB
+    }
+    // compander + chip: soft saturation of the wet path, as the 571 and the BBD clip gently
+    static float bbdSat (float x) { return std::tanh (x * 1.4f) * (1.0f / 1.4f); }
+
+    void processPolysix (float in, float& L, float& R, int mode, float knob)
+    {
+        const float invSr = 1.0f / sr;
+        const float us = sr * 1.0e-6f;                  // samples per microsecond
+        const float aPre = 1.0f - std::exp (-kTwoPi * 9000.0f * invSr);
+        pre1 += (in - pre1) * aPre; pre2 += (pre1 - pre2) * aPre; // anti-alias filter
+        float out = in;
+        switch (mode)
+        {
+            case 1: // CHORUS: one BBD, clock 8.3-16.7 us (120-60 kHz) swept by the speed LFO; dry:wet 2:1
+            {
+                const float rate = 0.1f * std::exp2 (knob * 6.3f); // 0.1 .. 8 Hz
+                slow += rate * invSr; if (slow >= 1.0f) slow -= 1.0f;
+                const float T = 12.5f + 4.2f * triFromPhase (slow);  // us
+                bbd[0].push (pre2 + bbdNoise());
+                const float wet = bbdFilter (bbdSat (bbd[0].read (256.0f * T * us)), post[0]);
+                out = 0.85f * (in + 0.5f * wet);
+                break;
+            }
+            case 2: // PHASE: one BBD, clock 2-10 us (500-100 kHz): a short swept delay with feedback, 1:1
+            {
+                const float rate = 0.05f * std::exp2 (knob * 7.0f); // 0.05 .. 6.4 Hz
+                slow += rate * invSr; if (slow >= 1.0f) slow -= 1.0f;
+                const float t = 0.5f * (triFromPhase (slow) + 1.0f);
+                const float T = 2.0f * std::pow (5.0f, t);           // exponential sweep 2..10 us
+                bbd[0].push (pre2 + 0.45f * bbdFb + bbdNoise());
+                const float wet = bbdFilter (bbdSat (bbd[0].read (std::max (1.0f, 256.0f * T * us))), post[0]);
+                bbdFb = wet;
+                out = 0.62f * (in + wet);
+                break;
+            }
+            case 3: // ENSEMBLE: three BBDs, clock 10-33 us, a slow and a fast LFO 120 degrees apart; 1:1:1
+            {
+                slow += 0.55f * invSr; if (slow >= 1.0f) slow -= 1.0f;
+                fast += 6.2f * invSr;  if (fast >= 1.0f) fast -= 1.0f;
+                const float depth = 0.2f + 0.8f * knob;
+                float wet = 0.0f;
+                for (int i = 0; i < 3; ++i)
+                {
+                    const float off = (float) i / 3.0f;
+                    const float m = 0.8f * std::sin (kTwoPi * (slow + off)) + 0.2f * std::sin (kTwoPi * (fast + off));
+                    const float T = 21.0f + 11.0f * depth * m;          // us
+                    bbd[i].push (pre2 + bbdNoise());
+                    wet += bbdFilter (bbdSat (bbd[i].read (256.0f * T * us)), post[i]);
+                }
+                out = 0.6f * (in + wet * (1.0f / 1.5f));
+                break;
+            }
+            default: break;
+        }
+        L = R = out;
+    }
+
+    void process (float in, float& L, float& R, int mode, float knob, int model)
+    {
+        if (model == 1)
+        {
+            if (lastMode != mode + 100) { for (auto& b : bbd) b.clear(); bbdFb = 0; lastMode = mode + 100; }
+            processPolysix (in, L, R, mode, knob);
+            return;
+        }
+        process (in, L, R, mode, knob);
     }
 
     void process (float in, float& L, float& R, int mode, float knob)
@@ -493,7 +646,7 @@ public:
             const float y = mono - dcX + 0.9995f * dcY; dcX = mono; dcY = y;
 
             float L, R;
-            fx.process (y, L, R, p.fxMode, p.fxSpeed);
+            fx.process (y, L, R, p.fxMode, p.fxSpeed, p.model);
             const float g = 0.8f * smVol * smVol;
             outL[i] = L * g;
             outR[i] = R * g;
@@ -762,10 +915,10 @@ private:
         const float an = p.analog;
 
         // MG (per voice, like the ensemble): triangle with delayed fade-in, rate wobble from "Analog"
-        const float mgHz = mgKnobToHz (p.mgFreq) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
+        const float mgHz = (p.model == 1 ? mgKnobToHzPolysix (p.mgFreq) : mgKnobToHz (p.mgFreq)) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
         v.mgPhase += mgHz * invSr; if (v.mgPhase >= 1.0f) v.mgPhase -= 1.0f;
         const float tri = triFromPhase (v.mgPhase);
-        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / logTimeToSec (p.mgDelay * 70.0f));
+        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / logTimeToSec (p.mgDelay * (p.model == 1 ? 80.0f : 70.0f)));
         else        v.mgEnv = std::max (0.0f, v.mgEnv - invSr / 0.001f);
         const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel;
 
@@ -791,7 +944,8 @@ private:
         if (p.waveform == 1) pw = 0.5f + 0.45f * p.pwPwm;
         else if (p.waveform == 2)
         {
-            const float hz = 0.1f * std::exp2 (p.pwmSpeed * 7.0f) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
+            // Polysix: up to 20 Hz
+            const float hz = 0.1f * std::exp2 (p.pwmSpeed * (p.model == 1 ? 7.64f : 7.0f)) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
             v.pwmPhase += hz * invSr; if (v.pwmPhase >= 1.0f) v.pwmPhase -= 1.0f;
             pw = 0.5f + 0.45f * p.pwPwm * triFromPhase (v.pwmPhase);
         }
@@ -804,14 +958,18 @@ private:
         const float eg = v.eg.tick (aSec, dSec, p.sustain, rSec, sr);
 
         // VCF
-        float cut = 21.0f + smCutoff * 110.0f
-                  + (voicePitch - 60.0f) * p.kbdTrack
+        // Polysix: CUTOFF spans 10-25 Hz to 19-24 kHz and KBD TRACK reaches 150% (service manual)
+        float cut = (p.model == 1 ? 10.5f + smCutoff * 125.5f : 21.0f + smCutoff * 110.0f)
+                  + (voicePitch - 60.0f) * p.kbdTrack * (p.model == 1 ? 1.5f : 1.0f)
                   + eg * p.egInt * 60.0f
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
         const float fc = std::min (pitchToHz (cut), 0.45f * sr);
-        const float g  = std::tan (kPi * fc * invSr);
-        const float filtered = v.vcf.process (osc, g, 4.2f * smRes);
+        float filtered;
+        if (p.model == 1)
+            filtered = v.ssm.process (osc, fc, smRes, sr);
+        else
+            filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
 
         // VCA
         const float step = 1000.0f * invSr; // slew-limited gate, as in the ensemble

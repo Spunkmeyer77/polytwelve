@@ -375,11 +375,12 @@ knob("fxSpeed", sx + 135, Y2 + 278, "SPEED/INT", 0.4)
 
 sx = nx(1406 - x); section(sx, Y2, 1406 - sx, H2, "MASTER", 25)
 mw = 1406 - sx
-knob("volume", sx + mw * 0.28, Y2 + 110, "VOLUME", 0.75)
-knob("tune", sx + mw * 0.72, Y2 + 110, "TUNE", 0.5, bipolar=True)
-display("bendRange", (sx + mw / 2 - 52, Y2 + 236, sx + mw / 2 + 52, Y2 + 272), 1)
-arrows("bendRange", (sx + mw / 2 - 52, Y2 + 236, sx + mw / 2 + 52, Y2 + 272))
-text((sx + mw / 2, Y2 + 294), "BEND RANGE", 10.5, F_XB)
+knob("volume", sx + mw * 0.28, Y2 + 98, "VOLUME", 0.75)
+knob("tune", sx + mw * 0.72, Y2 + 98, "TUNE", 0.5, bipolar=True)
+display("bendRange", (sx + mw / 2 - 52, Y2 + 196, sx + mw / 2 + 52, Y2 + 230), 1)
+arrows("bendRange", (sx + mw / 2 - 52, Y2 + 196, sx + mw / 2 + 52, Y2 + 230))
+text((sx + mw / 2, Y2 + 250), "BEND RANGE", 10.5, F_XB)
+switch("model", sx + mw / 2 - 34, Y2 + 318, "MODEL", ["CLASSIC", "POLYSIX"], 0, h=46)
 
 # ------------------------------------------------------------------ outputs
 img.save(os.path.join(RES, "panel.jpg"), quality=90, optimize=True, subsampling=0)

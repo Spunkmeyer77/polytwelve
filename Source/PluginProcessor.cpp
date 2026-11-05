@@ -128,6 +128,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     // Effects
     l.add (choice ("fxMode", "Effect", { "Off", "Chorus", "Phaser", "Ensemble" }, d.fxMode));
     l.add (knob ("fxSpeed", "Speed/Intensity", d.fxSpeed));
+    // Sound engine: the original Reaktor port, or the model built from the Polysix service manual
+    l.add (choice ("model", "Model", { "Classic", "Polysix" }, d.model));
     return l;
 }
 
@@ -142,7 +144,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
             r ("mgFreq"), r ("mgDelay"), r ("mgLevel"), r ("mgMode"),
             r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"), r ("glide"), r ("glideLegato"),
             r ("arpOn"), r ("arpSpeed"), r ("arpRange"), r ("arpMode"), r ("arpLatch"), r ("arpSync"), r ("arpDiv"),
-            r ("fxMode"), r ("fxSpeed") };
+            r ("fxMode"), r ("fxSpeed"), r ("model") };
 
     presets = std::make_unique<PresetManager> (*this);
 }
@@ -174,7 +176,7 @@ void PolysixAudioProcessor::pullParams()
     p.glide = f (raw.glide); p.glideLegato = b (raw.glideLegato);
     p.arpOn = b (raw.arpOn); p.arpSpeed = f (raw.arpSpeed); p.arpRange = i (raw.arpRange); p.arpMode = i (raw.arpMode);
     p.arpLatch = b (raw.arpLatch); p.arpSync = b (raw.arpSync); p.arpDiv = i (raw.arpDiv);
-    p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed);
+    p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed); p.model = i (raw.model);
 }
 
 void PolysixAudioProcessor::handleMidi (const juce::MidiMessage& m)
@@ -243,6 +245,7 @@ void PolysixAudioProcessor::setCurrentProgram (int index)
     for (auto* param : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
         {
+            if (rp->paramID == "model") continue; // the engine choice is global, not part of a sound
             float value = rp->convertFrom0to1 (rp->getDefaultValue());
             for (const auto& [id, v] : prog.values)
                 if (rp->paramID == id) value = v;
@@ -265,10 +268,19 @@ juce::ValueTree PolysixAudioProcessor::captureState()
     return state;
 }
 
-void PolysixAudioProcessor::restoreState (const juce::ValueTree& source)
+void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool keepModel)
 {
     if (! source.hasType (apvts.state.getType())) return;
     auto tree = source.createCopy();
+    {   // presets don't change the engine (MODEL); sessions do
+        const float current = raw.model->load();
+        auto child = tree.getChildWithProperty ("id", "model");
+        if (keepModel || ! child.isValid())
+        {
+            if (! child.isValid()) { child = juce::ValueTree ("PARAM"); child.setProperty ("id", "model", nullptr); tree.appendChild (child, nullptr); }
+            child.setProperty ("value", keepModel ? current : 0.0f, nullptr);
+        }
+    }
     const auto chord = juce::StringArray::fromTokens (tree.getProperty ("chordMemory", "0,3,7").toString(), ",", "");
     std::array<int, p6::kNumVoices> mem {};
     int count = 0;

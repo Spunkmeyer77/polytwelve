@@ -57,6 +57,17 @@ HISTORY = [
         ("New About window (click the logo) with version and contact details.", []),
         ("The manual is rewritten for the new panel, and this update history ships with every build.", []),
     ]),
+    ("0.7.0: Polysix model", [
+        ("New <b>MODEL</b> switch in MASTER: <b>CLASSIC</b> (the engine so far, unchanged) or <b>POLYSIX</b>, a new engine "
+         "built from the Korg Polysix service manual. Presets keep the current MODEL; projects remember it.", []),
+        ("The POLYSIX model:", [
+            "SSM2044 filter model, as on the Polysix voice board, with a clean self-oscillating sine at full resonance.",
+            "Cutoff, keyboard tracking (up to 150%), MG speed and delay, and PWM speed ranges from the factory specs.",
+            "Effects modelled on the bucket-brigade effect board, mono like the original; PHASE is now the original's short "
+            "swept delay with feedback.",
+        ]),
+        ("The manual has a new chapter on the two engines.", []),
+    ]),
 ]
 
 def build():
