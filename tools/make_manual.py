@@ -83,17 +83,17 @@ def build():
     def on_page(c, doc):
         c.setFont("DejaVu", 7.5)
         c.setFillColor(GREY)
-        c.drawString(18 * mm, 10 * mm, f"Polytwelve {VERSION} User Manual \u00b7 Ticco Ross")
+        c.drawString(18 * mm, 10 * mm, f"Polytwelve {VERSION} User Manual \u00b7 Transistor Labs")
         c.drawRightString(A4[0] - 18 * mm, 10 * mm, str(doc.page))
 
     s = []
     s += [Spacer(1, 30 * mm), Paragraph("POLYTWELVE", title), Spacer(1, 4),
           Paragraph(f"Programmable 12-voice synthesizer \u00b7 User Manual \u00b7 version {VERSION}", subtitle),
           Spacer(1, 10 * mm), Image(str(ROOT / "docs" / "panel.jpg"), width=170 * mm, height=170 * mm * 900 / 1440),
-          Spacer(1, 10 * mm), Paragraph("Ticco Ross \u00b7 ticcoross@gmail.com \u00b7 ticcoross.gumroad.com", subtitle), PageBreak()]
+          Spacer(1, 10 * mm), Paragraph("Transistor Labs \u00b7 ticcoross@gmail.com \u00b7 ticcoross.gumroad.com", subtitle), PageBreak()]
 
     s += [Paragraph("1. Introduction", h1), Paragraph(
-        f"Polytwelve is a programmable 12-voice analog-style synthesizer by Ticco Ross (2026), version {VERSION}. Each voice "
+        f"Polytwelve is a programmable 12-voice analog-style synthesizer by Transistor Labs (2026), version {VERSION}. Each voice "
         "has one oscillator with a sub-oscillator, a resonant 24 dB/oct low-pass filter, an envelope, an amplifier and its own "
         "modulation generator (MG). The twelve voices are summed and pass through a stereo effects section (Chorus, Phaser or "
         "Ensemble).", body), flow_diagram(),
@@ -121,7 +121,7 @@ def build():
                    "<b>Linux:</b> unpack the archive and run <i>./install.sh</i>. It installs for your user to <i>~/.vst3</i>, "
                    "<i>~/.lv2</i> and <i>~/.local/bin</i>, with no root needed."]),
           Paragraph("Afterwards, rescan plug-ins in your DAW. In Ableton Live on a Mac: Settings \u2192 Plug-Ins, turn on Use "
-                    "Audio Units v2, hold Option and click Rescan. Polytwelve appears under Ticco Ross.", body)]
+                    "Audio Units v2, hold Option and click Rescan. Polytwelve appears under Transistor Labs.", body)]
 
     s += [PageBreak(), Paragraph("3. The panel", h1),
           Paragraph("The panel follows the sound from left to right: the preset strip and logo along the top, the sound "
@@ -198,8 +198,9 @@ def build():
                    "tails ring. With all twelve busy, the oldest released voice is reused first, then the oldest held one.",
                    "<b>UNISON:</b> all twelve voices play one note, stacked with their DETUNE and ANALOG offsets, for a huge mono "
                    "sound. The last key pressed wins; releasing it returns to a key still held.",
-                   "<b>CHORD:</b> every key plays the stored chord, transposed. One chord sounds at a time, with the same last-key "
-                   "behaviour as Unison."]),
+                   "<b>CHORD:</b> every key plays the stored chord, transposed. Chords are polyphonic: when you play a new chord, "
+                   "the one you let go keeps ringing through its RELEASE. While keys overlap, the chord follows the last key "
+                   "(with GLIDE, if it is on), as in Unison."]),
           Paragraph("Storing a chord", h2),
           steps(["Hold the chord on your MIDI keyboard, e.g. A2, C3, E3, G3.",
                  "While holding it, press <b>MEMORY</b>. Its LED blinks.",
@@ -242,51 +243,26 @@ def build():
           table([["Control", "Range", "What it does"],
                  ["VOLUME", "0\u201310 (default 7.5)", "Overall output level, after the effects."],
                  ["TUNE", "\u00b1100 cents (\u22125 to +5 on the scale)", "Fine-tunes all voices by up to one semitone either way."],
-                 ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."],
-                 ["MODEL", "CLASSIC \u00b7 POLYSIX", "Which sound engine plays: see the next chapter."]], [28, 42, 100])]
+                 ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."]], [28, 42, 100])]
 
-    s += [Paragraph("Sound engine: MODEL", h1),
-          Paragraph("Polytwelve has two sound engines, picked with the MODEL switch in the MASTER section. Every preset plays "
-                    "on both, so you can flip the switch and compare. MODEL belongs to the instrument, not to a sound: changing "
-                    "preset keeps it, and your project remembers it.", body),
-          bullets(["<b>CLASSIC</b> is the original Polytwelve engine, ported from the Polysix 2 Reaktor ensemble, with its "
-                   "ladder filter and stereo effects. Out of the box it sounds as in earlier versions; the CLASSIC Calibration switches below let you move it, one part at a time, towards a real Polysix.",
-                   "<b>POLYSIX</b> is built from the Korg Polysix service manual (circuit diagrams KLM-366 and KLM-368, "
-                   "and the factory adjustment procedure)."]),
-          Paragraph("What POLYSIX changes", h2),
-          table([["Part", "POLYSIX model"],
-                 ["Filter", "An SSM2044 model, the chip on the Polysix voice board: four transconductance stages that each "
-                            "saturate softly, and a saturating resonance loop. At RESONANCE 10 it settles into a clean sine. The "
-                            "bass thins as resonance rises, as on the original, so very resonant sounds play quieter."],
-                 ["Cutoff", "The knob follows the curve measured on a real Polysix: open from 7 up, much darker at 5, "
-                            "almost shut at 4 and closed at 2. KBD TRACK pivots low on the keyboard, as on the real unit."],
-                 ["Pulse / PWM", "PW narrows all the way until the pulse closes at 10; PWM sweeps through that point, "
-                                 "about 5 Hz at SPEED 5. Pulse and PWM levels as measured."],
-                 ["Sub", "Sub oscillator level as measured (about 3 dB under the old level)."],
-                 ["MG", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; depth a third of the old one; "
-                        "DELAY reaches half depth after about 1.6 s at 5."],
-                 ["Envelopes", "Time knobs steeper: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."],
-                 ["Effects", "Modelled on the KLM-368 effect board: bucket-brigade (MN3004) delay lines with their filters, "
-                             "soft compander saturation and a little noise; mono, like the Polysix output. CHORUS: one delay, "
-                             "2\u20134 ms. PHASE: a short swept delay (0.5\u20132.6 ms) with feedback, as on the original, "
-                             "which is a flanging sound rather than a phaser. ENSEMBLE: three delays driven by a slow and a fast "
-                             "modulation, 120\u00b0 apart."]], [28, 142]),
-          Paragraph("Since 0.8.0 the POLYSIX model is fitted to recordings of a real Polysix (27 test takes: levels, filter "
-                    "curve, resonance, envelopes, MG and all three effects).", small),
-          Paragraph("CLASSIC Calibration (A/B)", h2),
-          Paragraph("Open the preset menu (BANK) and choose <b>CLASSIC Calibration (A/B)</b>. Each item switches one fix, "
-                    "measured on a real Polysix, into the CLASSIC engine, so you can compare it and keep only the ones you "
-                    "like. All are off by default. They are global like MODEL: presets don't change them, projects remember them. "
-                    "They have no effect on POLYSIX, which always uses the first seven.", body),
+    s += [Paragraph("Calibration (A/B)", h1),
+          Paragraph("Polytwelve's engine is ported from the Polysix 2 Reaktor ensemble. Since 0.8.0 it can also be moved, one "
+                    "part at a time, towards measurements of a real Korg Polysix (27 test recordings). Open the preset menu "
+                    "(BANK) and choose <b>Calibration (A/B)</b>: each item switches one fix on or off, so you can compare it "
+                    "and keep only the ones you like. All are off by default, which is the original sound. They belong to the "
+                    "instrument, not to a sound: presets don't change them, and your project remembers them.", body),
           table([["Switch", "What it changes"],
-                 ["Cutoff Curve", "The real CUTOFF knob law and KBD TRACK pivot."],
+                 ["Cutoff Curve", "The real CUTOFF knob law (open from 7 up, much darker at 5, almost shut at 4, closed at 2) "
+                                  "and the real KBD TRACK pivot, low on the keyboard."],
                  ["Resonance Level", "Self-oscillation about 8 dB louder, as on the real unit."],
-                 ["Pulse Width Range", "Pulse closes at PW 10; real pulse/PWM levels; PWM SPEED range."],
-                 ["Sub Level", "Sub oscillator level as measured."],
-                 ["MG Rate & Depth", "Real FREQUENCY curve, a third of the depth, longer DELAY."],
-                 ["Envelope Times", "Steeper attack, decay and release time curves."],
-                 ["Effects", "Uses the fitted bucket-brigade effects (mono) with the real speeds and levels."],
-                 ["Noise Floor", "Adds the real unit's faint hiss and slow ripple (about \u221256 dB). Never on in POLYSIX, and \u201cAll On\u201d leaves it off: switch it on by itself."]], [34, 136])]
+                 ["Pulse Width Range", "PW narrows until the pulse closes at 10; real pulse and PWM levels; PWM about 5 Hz at SPEED 5."],
+                 ["Sub Level", "Sub oscillator about 3 dB quieter, as measured."],
+                 ["MG Rate & Depth", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; a third of the depth; DELAY "
+                                     "reaches half depth after about 1.6 s at 5."],
+                 ["Envelope Times", "Steeper time knobs: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."],
+                 ["Effects", "Bucket-brigade effects (mono, like the original) with the measured speeds, depths and levels."],
+                 ["Noise Floor", "The real unit's faint hiss and slow ripple (about \u221256 dB). \u201cAll On\u201d leaves it "
+                                 "off: switch it on by itself."]], [34, 136])]
 
     s += [PageBreak(), Paragraph("9. Presets", h1),
           Paragraph("A preset stores every control plus the stored chord. The amber display shows the bank (FACTORY or USER), "
@@ -313,9 +289,9 @@ def build():
           Paragraph("User presets are .p6preset files, one per sound, which you can copy, back up or share. Favourites are listed "
                     "in favourites.txt in the same folder.", body),
           table([["System", "Preset folder"],
-                 ["macOS", "~/Library/Audio/Presets/Ticco Ross/Polytwelve"],
-                 ["Windows", "Documents\\Ticco Ross\\Polytwelve\\Presets"],
-                 ["Linux", "~/.local/share/Ticco Ross/Polytwelve/Presets"]], [35, 135])]
+                 ["macOS", "~/Library/Audio/Presets/Transistor Labs/Polytwelve"],
+                 ["Windows", "Documents\\Transistor Labs\\Polytwelve\\Presets"],
+                 ["Linux", "~/.local/share/Transistor Labs/Polytwelve/Presets"]], [35, 135])]
 
     s += [Paragraph("10. MIDI implementation", h1),
           Paragraph("Polytwelve responds on all MIDI channels.", body),
@@ -343,11 +319,11 @@ def build():
                    "<b>Linux:</b> run ./uninstall.sh from the downloaded folder."]),
           Paragraph("Uninstalling leaves your presets in place.", small),
           Paragraph("Contact", h2),
-          Paragraph("Polytwelve is designed by Ticco Ross, 2026. Questions, bug reports and suggestions: <b>ticcoross@gmail.com</b>. "
+          Paragraph("Polytwelve is designed by Transistor Labs, 2026. Questions, bug reports and suggestions: <b>ticcoross@gmail.com</b>. "
                     "More instruments: <b>ticcoross.gumroad.com</b>. Click the POLYTWELVE logo on the panel for the About window.", body)]
 
     SimpleDocTemplate(str(OUT), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=18 * mm,
-                      title="Polytwelve User Manual", author="Ticco Ross").build(s, onFirstPage=on_page, onLaterPages=on_page)
+                      title="Polytwelve User Manual", author="Transistor Labs").build(s, onFirstPage=on_page, onLaterPages=on_page)
     print("wrote", OUT)
 
 if __name__ == "__main__":

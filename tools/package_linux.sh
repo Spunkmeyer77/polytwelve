@@ -30,12 +30,12 @@ EOF
 cat > "$STAGE/uninstall.sh" <<'EOF'
 #!/bin/bash
 rm -rf ~/.vst3/Polytwelve.vst3 ~/.lv2/Polytwelve.lv2 ~/.local/bin/Polytwelve
-echo "Polytwelve removed (presets in ~/.local/share/Ticco Ross/Polytwelve are kept)."
+echo "Polytwelve removed (presets in ~/.local/share/Transistor Labs/Polytwelve are kept)."
 EOF
 chmod +x "$STAGE/install.sh" "$STAGE/uninstall.sh"
 
 cat > "$STAGE/README.txt" <<EOF
-Polytwelve $VERSION - Programmable 12 voice synth - Ticco Ross 2026
+Polytwelve $VERSION - Programmable 12 voice synth - Transistor Labs 2026
 
 Install:    ./install.sh      (VST3 -> ~/.vst3, LV2 -> ~/.lv2, app -> ~/.local/bin)
 Uninstall:  ./uninstall.sh

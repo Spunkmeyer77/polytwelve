@@ -9,23 +9,36 @@ PresetManager::PresetManager (PolysixAudioProcessor& p) : proc (p)
     refresh();
 }
 
-juce::File PresetManager::getUserDir() const
+static juce::File presetDirFor (const juce::String& vendor)
 {
    #if JUCE_MAC
     return juce::File::getSpecialLocation (juce::File::userHomeDirectory)
-             .getChildFile ("Library/Audio/Presets/Ticco Ross/Polytwelve");
+             .getChildFile ("Library/Audio/Presets/" + vendor + "/Polytwelve");
    #elif JUCE_WINDOWS
-    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)   // Documents\Ticco Ross\Polytwelve\Presets
-             .getChildFile ("Ticco Ross/Polytwelve/Presets");
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)   // Documents\Transistor Labs\Polytwelve\Presets
+             .getChildFile (vendor + "/Polytwelve/Presets");
    #else
-    return juce::File::getSpecialLocation (juce::File::userHomeDirectory)        // ~/.local/share/Ticco Ross/Polytwelve/Presets
-             .getChildFile (".local/share/Ticco Ross/Polytwelve/Presets");
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory)        // ~/.local/share/Transistor Labs/Polytwelve/Presets
+             .getChildFile (".local/share/" + vendor + "/Polytwelve/Presets");
    #endif
 }
 
-// First run: bring over presets + favourites saved with the earlier "Polysix Port" build
+juce::File PresetManager::getUserDir() const { return presetDirFor ("Transistor Labs"); }
+
+// First run: bring over presets + favourites saved under the old vendor name (Ticco Ross),
+// or with the earlier "Polysix Port" build
 void PresetManager::migrateOldPresets()
 {
+    const auto newDir = getUserDir();
+    if (newDir.isDirectory()) return;
+    const auto ticco = presetDirFor ("Ticco Ross");
+    if (ticco.isDirectory())
+    {
+        newDir.createDirectory();
+        for (const auto& f : ticco.findChildFiles (juce::File::findFiles, false, "*"))
+            f.copyFileTo (newDir.getChildFile (f.getFileName()));
+        return;
+    }
    #if JUCE_MAC
     const auto oldDir = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
                           .getChildFile ("Library/Audio/Presets/DIY/Polysix Port");
@@ -33,8 +46,7 @@ void PresetManager::migrateOldPresets()
     const auto oldDir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                           .getChildFile ("DIY/Polysix Port/Presets");
    #endif
-    const auto newDir = getUserDir();
-    if (newDir.isDirectory() || ! oldDir.isDirectory()) return;
+    if (! oldDir.isDirectory()) return;
     newDir.createDirectory();
     for (const auto& f : oldDir.findChildFiles (juce::File::findFiles, false, "*"))
         f.copyFileTo (newDir.getChildFile (f.getFileName()));

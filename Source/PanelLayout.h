@@ -66,6 +66,5 @@ inline constexpr Item items[] = {
     { Kind::Display, "bendRange", 1227.0f, 684.0f, 104.0f, 34.0f, 1, 104.0f },
     { Kind::Button, "bendRangeDown", 1187.0f, 687.0f, 46.0f, 30.1f, 0, 46.0f },
     { Kind::Button, "bendRangeUp", 1325.0f, 687.0f, 46.0f, 30.1f, 0, 46.0f },
-    { Kind::Switch, "model", 1231.5f, 783.0f, 27.1f, 46.0f, 2, 74.6f },
 };
 } // namespace ui

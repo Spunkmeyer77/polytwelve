@@ -85,17 +85,26 @@ HISTORY = [
          "(\u201cThis Audio Unit v2 plug-in could not be opened\u201d). The minimum macOS is 10.13 again, and every build is "
          "now checked for it.", []),
     ]),
+    ("0.9.0: One engine, Transistor Labs", [
+        ("The POLYSIX engine is removed: the original engine is the one that stays. The MODEL switch is gone from the panel.", []),
+        ("The calibration switches remain, in the preset menu (BANK) under <b>Calibration (A/B)</b>; all off by default.", []),
+        ("Fixed: in CHORD mode a new chord cut off the previous one. Chords are now polyphonic, so a released chord "
+         "rings through its release.", []),
+        ("The vendor is now <b>Transistor Labs</b> (plugin lists, installers, About window, manual). User presets move "
+         "automatically to the Transistor Labs preset folder.", []),
+        ("Manual updated.", []),
+    ]),
 ]
 
 def build():
     def on_page(c, doc):
         c.setFont("DejaVu", 7.5)
         c.setFillColor(GREY)
-        c.drawString(18 * mm, 10 * mm, f"Polytwelve {VERSION} Update History · Ticco Ross")
+        c.drawString(18 * mm, 10 * mm, f"Polytwelve {VERSION} Update History · Transistor Labs")
         c.drawRightString(A4[0] - 18 * mm, 10 * mm, str(doc.page))
 
     story = [Paragraph("Polytwelve Update History", title), Spacer(1, 4),
-             Paragraph(f"Ticco Ross · current version {VERSION}", subtitle), Spacer(1, 10)]
+             Paragraph(f"Transistor Labs · current version {VERSION}", subtitle), Spacer(1, 10)]
     n = 0
     for heading, items in HISTORY:
         block = [Paragraph(heading, h2)]
@@ -105,7 +114,7 @@ def build():
             block += [Paragraph("•&nbsp;&nbsp;" + s, sub) for s in subs]
         story.append(KeepTogether(block))
     SimpleDocTemplate(str(OUT), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm,
-                      title="Polytwelve Update History", author="Ticco Ross").build(story, onFirstPage=on_page, onLaterPages=on_page)
+                      title="Polytwelve Update History", author="Transistor Labs").build(story, onFirstPage=on_page, onLaterPages=on_page)
     print("wrote", OUT)
 
 if __name__ == "__main__":

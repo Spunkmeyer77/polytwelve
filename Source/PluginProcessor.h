@@ -8,7 +8,7 @@ class PolysixAudioProcessor : public juce::AudioProcessor
 {
 public:
     PolysixAudioProcessor();
-    // CLASSIC calibration switches (bit order of p6::CalibBits)
+    // calibration switches (bit order of p6::CalibBits)
     static juce::String calibId (int c)   { return "cal_" + juce::String (c); }
     static juce::String calibName (int c)
     {
@@ -77,7 +77,7 @@ private:
                            *mgFreq, *mgDelay, *mgLevel, *mgMode,
                            *voiceMode, *hold, *analog, *detune, *bendRange, *glide, *glideLegato,
                            *arpOn, *arpSpeed, *arpRange, *arpMode, *arpLatch, *arpSync, *arpDiv,
-                           *fxMode, *fxSpeed, *model;
+                           *fxMode, *fxSpeed;
         std::atomic<float>* cal[p6::kCalibCount] {};
     } raw {};
 

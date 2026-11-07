@@ -380,7 +380,6 @@ knob("tune", sx + mw * 0.72, Y2 + 98, "TUNE", 0.5, bipolar=True)
 display("bendRange", (sx + mw / 2 - 52, Y2 + 196, sx + mw / 2 + 52, Y2 + 230), 1)
 arrows("bendRange", (sx + mw / 2 - 52, Y2 + 196, sx + mw / 2 + 52, Y2 + 230))
 text((sx + mw / 2, Y2 + 250), "BEND RANGE", 10.5, F_XB)
-switch("model", sx + mw / 2 - 34, Y2 + 318, "MODEL", ["CLASSIC", "POLYSIX"], 0, h=46)
 
 # ------------------------------------------------------------------ outputs
 img.save(os.path.join(RES, "panel.jpg"), quality=90, optimize=True, subsampling=0)

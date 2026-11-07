@@ -104,17 +104,14 @@ struct Params
     int   arpDiv   = 3;        // index into kArpDivBeats
     // Effects
     int   fxMode  = 0;         // 0=Off 1=Chorus 2=Phaser 3=Ensemble
-    int   model   = 0;         // 0=Classic (the Reaktor port), 1=Polysix (from the service manual)
     float fxSpeed = 0.4f;      // 0..1 speed (chorus/phaser) or intensity (ensemble)
-    // Calibration against recordings of a real Polysix (0.8.0). CLASSIC applies only the bits
-    // switched on here (each is an A/B option); POLYSIX always applies the first seven.
+    // Calibration against recordings of a real Polysix (0.8.0): each bit is an A/B option
     int   calib   = 0;
 };
 
 enum CalibBits : int { calCutoff = 1, calResonance = 2, calPulse = 4, calSub = 8,
                        calMg = 16, calEnvelope = 32, calEffects = 64, calNoise = 128 };
 constexpr int kCalibCount = 8;
-constexpr int kCalibPolysix = 127;
 
 // CUTOFF knob law measured on the real unit: almost shut by 4, closed at 2, as before from 7 up
 inline float cutoffLawCal (float c)
@@ -153,18 +150,6 @@ inline float mgKnobToHz (float k)
     return 20.0f;
 }
 
-// Polysix MG curve, from the service manual: FREQUENCY 0 = a 10-40 s cycle, 4 = about 7 Hz
-// (fig. 3: 100-200 ms), 10 = 50 Hz (fig. 2). Interpolated in log frequency.
-inline float mgKnobToHzPolysix (float k)
-{
-    static constexpr float xs[] = { 0.0f, 0.4f, 0.7f, 1.0f };
-    static constexpr float ys[] = { 0.04f, 7.0f, 20.0f, 50.0f };
-    k = clampf (k, 0.0f, 1.0f);
-    for (int i = 0; i < 3; ++i)
-        if (k <= xs[i + 1])
-            return ys[i] * std::pow (ys[i + 1] / ys[i], (k - xs[i]) / (xs[i + 1] - xs[i]));
-    return 50.0f;
-}
 
 // ---------------------------------------------------------------------------------------------
 // VCO: band-limited saw / pulse, with a flip-flop divider sub oscillator (f/2 or f/4) locked to the main cycle
@@ -239,58 +224,6 @@ struct Ladder
 };
 
 // ---------------------------------------------------------------------------------------------
-// VCF type 2: SSM2044, as on the Polysix voice board (KLM-366, IC32).
-// The chip is four transconductance-capacitor stages in cascade. Each stage is a differential
-// pair, so it integrates tanh of (its input - its output): a soft, level-dependent slew that
-// rounds edges without the "tanh on every voltage" fizz of a generic ladder. Resonance is an
-// external VCA feeding the 4th output back to the input; it saturates too, so at 10 the filter
-// settles into a clean, stable sine instead of growing. Nothing compensates the passband: the
-// bass thins as resonance rises, as on the Polysix. Runs 2x oversampled.
-struct Ssm2044
-{
-    float y[4] = { 0, 0, 0, 0 };
-    float y4prev = 0.0f, xPrev = 0.0f;
-
-    void reset() { y[0] = y[1] = y[2] = y[3] = 0.0f; y4prev = xPrev = 0.0f; }
-
-    // x: voice signal (about +/-0.6); fcHz: cutoff; res: 0..1 (the RESONANCE knob); sr: base rate
-    float process (float x, float fcHz, float res, float sr)
-    {
-        constexpr float kPiF = 3.14159265358979f;
-        const float srOS = 2.0f * sr;
-        fcHz = std::min (fcHz, 0.42f * sr);
-        // stage coefficient with a little pre-warp so resonance stays in tune near the top
-        const float wc = 2.0f * kPiF * fcHz / srOS;
-        // tuning: the explicit integrators and the averaged feedback make the loop run flat,
-        // so the coefficient is scaled (measured, see tests/ssm2044) to put the peak on fcHz
-        const float g  = std::min (0.98f, 1.0f - std::exp (-wc * 1.21f));
-        // resonance law: the Polysix pot gives a gentle start and reaches self-oscillation near 9.5;
-        // the loop loses gain at high cutoffs, which the k boost makes up
-        const float k = 4.6f * res * (0.55f + 0.45f * res) * (1.0f + wc * wc);
-
-        constexpr float drive = 1.6f;   // VCO level into the chip: mild saturation on full saws
-        float out = 0.0f;
-        for (int n = 0; n < 2; ++n)
-        {
-            const float xin = (n == 0 ? 0.5f * (xPrev + x) : x) * drive;
-            // half-sample feedback average keeps the resonant peak where it should be
-            const float fb = 0.5f * (y[3] + y4prev);
-            y4prev = y[3];
-            const float u = xin - k * std::tanh (fb);
-            float prev = u;
-            for (int i = 0; i < 4; ++i)
-            {
-                y[i] += g * std::tanh (prev - y[i]);
-                prev = y[i];
-            }
-            out += y[3];
-        }
-        xPrev = x;
-        return 0.5f * out / drive;
-    }
-};
-
-// ---------------------------------------------------------------------------------------------
 // Analog-style ADSR (exponential segments, retriggers from current level)
 struct Adsr
 {
@@ -334,7 +267,6 @@ struct Voice
 
     Vco    vco;
     Ladder vcf;
-    Ssm2044 ssm;
     Adsr   eg;
     float  gateSlew = 0.0f;  // VCA gate mode (slew-limited gate)
     float  pitchNow = 60.0f; // glided note pitch (semitones)
@@ -355,7 +287,7 @@ struct Voice
     // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
     void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
-        if (! active) { vcf.reset(); ssm.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
+        if (! active) { vcf.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
         pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
         eg.gateOn();
@@ -495,9 +427,9 @@ struct Effects
         L = R = out;
     }
 
-    void process (float in, float& L, float& R, int mode, float knob, int model, bool cal = false)
+    void process (float in, float& L, float& R, int mode, float knob, bool cal)
     {
-        if (model == 1 || cal)
+        if (cal)
         {
             if (lastMode != mode + 100) { for (auto& b : bbd) b.clear(); bbdFb = 0; lastMode = mode + 100; }
             processPolysix (in, L, R, mode, knob, cal);
@@ -654,7 +586,7 @@ public:
     // ---- rendering --------------------------------------------------------------------------
     void render (float* outL, float* outR, int numSamples)
     {
-        cb = p.model == 1 ? kCalibPolysix : p.calib;
+        cb = p.calib;
         if (captureRequest.exchange (false, std::memory_order_acq_rel)) captureChord (1);
         checkModeChanges();
 
@@ -680,7 +612,7 @@ public:
             const float y = mono - dcX + 0.9995f * dcY; dcX = mono; dcY = y;
 
             float L, R;
-            fx.process (y, L, R, p.fxMode, p.fxSpeed, p.model, (cb & calEffects) != 0);
+            fx.process (y, L, R, p.fxMode, p.fxSpeed, (cb & calEffects) != 0);
             if (p.calib & calNoise) // the real unit's floor: hiss at about -56 dB under a note, with a slow ripple
             {
                 humPh += 4.4f * invSr; if (humPh >= 1.0f) humPh -= 1.0f;
@@ -809,7 +741,7 @@ private:
             if (note == monoNote)
             {
                 if (! monoStack.empty()) { triggerMono (monoStack.back(), true); lastPlayed = (float) monoStack.back(); }
-                else { for (auto& v : voices) v.stop (++now); monoNote = -1; }
+                else { for (auto& v : voices) if (v.gate) v.stop (++now); monoNote = -1; chordVoxN = 0; }
             }
         }
     }
@@ -829,14 +761,36 @@ private:
         {
             for (auto& v : voices) v.start (note, ++now, from (v, 0));
         }
-        else // chord memory
+        else // chord memory: polyphonic, so a released chord keeps ringing through its release
         {
-            const size_t n = (size_t) std::clamp (chordSize.load (std::memory_order_relaxed), 1, kNumVoices);
-            for (size_t i = 0; i < (size_t) kNumVoices; ++i)
+            const int n = std::clamp (chordSize.load (std::memory_order_relaxed), 1, kNumVoices);
+            // legato (keys still held): move the same voices, so glide works; otherwise take fresh voices
+            if (! (overlapping && chordVoxN == n))
             {
-                const int iv = chordInt[i].load (std::memory_order_relaxed);
-                if (i < n) voices[i].start (std::clamp (note + iv, 0, 127), ++now, from (voices[i], iv));
-                else       voices[i].stop (++now);
+                bool taken[kNumVoices] = {};
+                for (int k = 0; k < n; ++k)
+                {
+                    int best = -1;
+                    for (int j = 0; j < kNumVoices && best < 0; ++j) // round robin over idle voices
+                    {
+                        const int i = (nextVoice + j) % kNumVoices;
+                        if (! taken[i] && ! voices[(size_t) i].active) best = i;
+                    }
+                    uint64_t bestT = UINT64_MAX;
+                    if (best < 0) // else the oldest released voice, else the oldest of all
+                        for (int pass = 0; pass < 2 && best < 0; ++pass)
+                            for (int i = 0; i < kNumVoices; ++i)
+                                if (! taken[i] && (pass == 1 || ! voices[(size_t) i].gate) && voices[(size_t) i].stamp < bestT)
+                                { bestT = voices[(size_t) i].stamp; best = i; }
+                    taken[best] = true; chordVox[(size_t) k] = best; nextVoice = (best + 1) % kNumVoices;
+                }
+                chordVoxN = n;
+            }
+            for (int k = 0; k < n; ++k)
+            {
+                const int iv = chordInt[(size_t) k].load (std::memory_order_relaxed);
+                auto& v = voices[(size_t) chordVox[(size_t) k]];
+                v.start (std::clamp (note + iv, 0, 127), ++now, from (v, iv));
             }
         }
     }
@@ -860,7 +814,8 @@ private:
         return best;
     }
 
-    void releaseAllVoices() { for (auto& v : voices) v.stop (++now); monoStack.clear(); monoNote = -1; }
+    void releaseAllVoices() { for (auto& v : voices) v.stop (++now); monoStack.clear(); monoNote = -1; chordVoxN = 0; }
+    std::array<int, kNumVoices> chordVox {}; int chordVoxN = 0; // voices playing the current chord
 
     void resetPerformance()
     {
@@ -957,11 +912,11 @@ private:
         const float an = p.analog;
 
         // MG (per voice, like the ensemble): triangle with delayed fade-in, rate wobble from "Analog"
-        const float mgHz = ((cb & calMg) ? mgKnobToHzCal (p.mgFreq) : p.model == 1 ? mgKnobToHzPolysix (p.mgFreq) : mgKnobToHz (p.mgFreq)) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
+        const float mgHz = ((cb & calMg) ? mgKnobToHzCal (p.mgFreq) : mgKnobToHz (p.mgFreq)) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
         v.mgPhase += mgHz * invSr; if (v.mgPhase >= 1.0f) v.mgPhase -= 1.0f;
         const float tri = triFromPhase (v.mgPhase);
         const float mgDelaySec = (cb & calMg) ? std::max (0.001f, 12.8f * p.mgDelay * p.mgDelay) // real: half depth after 1.6 s at 5
-                                             : logTimeToSec (p.mgDelay * (p.model == 1 ? 80.0f : 70.0f));
+                                             : logTimeToSec (p.mgDelay * 70.0f);
         if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / mgDelaySec);
         else        v.mgEnv = std::max (0.0f, v.mgEnv - invSr / 0.001f);
         const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel * ((cb & calMg) ? 0.33f : 1.0f); // measured depth is a third
@@ -991,7 +946,7 @@ private:
         else if (p.waveform == 2)
         {
             // Polysix: up to 20 Hz
-            const float hz = (cp ? 1.25f * std::exp2 (p.pwmSpeed * 4.0f) : 0.1f * std::exp2 (p.pwmSpeed * (p.model == 1 ? 7.64f : 7.0f))) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
+            const float hz = (cp ? 1.25f * std::exp2 (p.pwmSpeed * 4.0f) : 0.1f * std::exp2 (p.pwmSpeed * 7.0f)) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
             v.pwmPhase += hz * invSr; if (v.pwmPhase >= 1.0f) v.pwmPhase -= 1.0f;
             pw = 0.5f + pwSpan * p.pwPwm * triFromPhase (v.pwmPhase);
         }
@@ -1015,17 +970,13 @@ private:
         // VCF
         // Polysix: CUTOFF spans 10-25 Hz to 19-24 kHz and KBD TRACK reaches 150% (service manual)
         const float cKnob = (cb & calCutoff) ? cutoffLawCal (smCutoff) : smCutoff;
-        float cut = (p.model == 1 ? 10.5f + cKnob * 125.5f : 21.0f + cKnob * 110.0f)
-                  + (voicePitch - ((cb & calCutoff) ? 24.0f : 60.0f)) * p.kbdTrack * (p.model == 1 && ! (cb & calCutoff) ? 1.5f : 1.0f) // real KBD TRACK pivots low on the keyboard
+        float cut = (21.0f + cKnob * 110.0f)
+                  + (voicePitch - ((cb & calCutoff) ? 24.0f : 60.0f)) * p.kbdTrack // real KBD TRACK pivots low on the keyboard
                   + eg * p.egInt * 60.0f
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
         const float fc = std::min (pitchToHz (cut), 0.45f * sr);
-        float filtered;
-        if (p.model == 1)
-            filtered = v.ssm.process (osc, fc, smRes, sr);
-        else
-            filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
+        float filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
         if (cb & calResonance) filtered *= 1.0f + 1.5f * smRes * smRes; // real self-oscillation is about 8 dB louder
 
         // VCA

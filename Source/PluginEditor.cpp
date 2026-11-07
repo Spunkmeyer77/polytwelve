@@ -247,7 +247,7 @@ void AboutOverlay::paint (juce::Graphics& g)
         "Chord memory, arpeggiator, Chorus / Phaser / Ensemble,",
         "preset banks with favourites.",
         "",
-        "Designed by Ticco Ross, 2026.",
+        "Designed by Transistor Labs, 2026.",
     };
     float y = b.getY() + 156.0f;
     for (auto* l : lines) { text (l, y, 20.0f, 14.5f, kCream, false); y += 21.0f; }
@@ -708,9 +708,9 @@ void PolysixEditor::showPresetMenu()
             cal.addItem (91000 + c, PolysixAudioProcessor::calibName (c), true, value (PolysixAudioProcessor::calibId (c)) > 0.5f);
         cal.addSeparator();
         cal.addItem (91100, "All On (matches the real Polysix)");
-        cal.addItem (91101, "All Off (original CLASSIC)");
+        cal.addItem (91101, "All Off (original sound)");
         menu.addSeparator();
-        menu.addSubMenu ("CLASSIC Calibration (A/B)", cal);
+        menu.addSubMenu ("Calibration (A/B)", cal);
     }
     menu.addSeparator();
     menu.addItem (90002, "Open Preset File...");

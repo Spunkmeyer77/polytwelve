@@ -1,6 +1,6 @@
 # Polytwelve
 
-Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026. Version 0.7.0.
+Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Transistor Labs, 2026. Version 0.9.0.
 
 ![Polytwelve panel](docs/panel.jpg)
 
@@ -32,7 +32,7 @@ Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026. 
    - `~/Library/Audio/Plug-Ins/VST3/Polytwelve.vst3`
 4. **Validate the AU (optional):** `auval -v aumu Ptwv Tcro`
 5. **Ableton Live:** go to Settings → Plug-Ins, turn on "Use Audio Units v2", and rescan.
-   The synth appears under Plug-Ins → Audio Units → Ticco Ross → Polytwelve.
+   The synth appears under Plug-Ins → Audio Units → Transistor Labs → Polytwelve.
 
 The standalone app is in `build/Polytwelve_artefacts/Release/Standalone/`.
 
@@ -48,7 +48,7 @@ The bar at the top right of the plugin window:
   existing name asks before replacing it.
 - **DEL** deletes the current user preset. Factory presets can't be deleted.
 
-User presets are `.p6preset` files in `~/Library/Audio/Presets/Ticco Ross/Polytwelve/`, so you can
+User presets are `.p6preset` files in `~/Library/Audio/Presets/Transistor Labs/Polytwelve/`, so you can
 back them up or share them. Favourites are stored in `favourites.txt` in the same folder.
 Your Live set also remembers which preset was loaded. The first time it runs, Polytwelve copies over
 any presets saved with the earlier "Polysix Port" build.
@@ -130,5 +130,5 @@ to a new release on the repository's Releases page.
 The installers are unsigned. On first open, macOS shows a Gatekeeper warning (fix: Privacy &
 Security → Open Anyway) and Windows shows SmartScreen (fix: More info → Run anyway).
 
-Preset folders: macOS `~/Library/Audio/Presets/Ticco Ross/Polytwelve`,
-Windows `Documents\Ticco Ross\Polytwelve\Presets`, Linux `~/.local/share/Ticco Ross/Polytwelve/Presets`.
+Preset folders: macOS `~/Library/Audio/Presets/Transistor Labs/Polytwelve`,
+Windows `Documents\Transistor Labs\Polytwelve\Presets`, Linux `~/.local/share/Transistor Labs/Polytwelve/Presets`.

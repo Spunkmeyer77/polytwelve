@@ -6,9 +6,9 @@ class PolysixAudioProcessor;
 
 // Factory + user presets, favourites, prev/next. Message-thread only.
 // User presets (*.p6preset):
-//   macOS    ~/Library/Audio/Presets/Ticco Ross/Polytwelve
-//   Windows  Documents\Ticco Ross\Polytwelve\Presets
-//   Linux    ~/.local/share/Ticco Ross/Polytwelve/Presets
+//   macOS    ~/Library/Audio/Presets/Transistor Labs/Polytwelve
+//   Windows  Documents\Transistor Labs\Polytwelve\Presets
+//   Linux    ~/.local/share/Transistor Labs/Polytwelve/Presets
 class PresetManager : public juce::ChangeBroadcaster
 {
 public:

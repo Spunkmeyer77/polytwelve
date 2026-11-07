@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 # must come before project(), or the compiler is set up for the build machine's macOS
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
 
-project(Polytwelve VERSION 0.8.1)
+project(Polytwelve VERSION 0.9.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,13 +32,13 @@ endif()
 option(P12_COPY_PLUGINS "Copy plug-ins to the plug-in folders after building" ON)
 
 juce_add_plugin(Polytwelve
-    COMPANY_NAME "Ticco Ross"
+    COMPANY_NAME "Transistor Labs"
     PLUGIN_MANUFACTURER_CODE Tcro
     PLUGIN_CODE Ptwv
     FORMATS ${P12_FORMATS}
     LV2URI "urn:ticcoross:polytwelve"
     PRODUCT_NAME "Polytwelve"
-    BUNDLE_ID com.ticcoross.polytwelve
+    BUNDLE_ID com.transistorlabs.polytwelve
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE

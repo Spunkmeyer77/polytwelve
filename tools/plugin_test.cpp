@@ -16,7 +16,7 @@ int main (int argc, char** argv)
     for (int prog = 0; prog < proc.getNumPrograms(); ++prog)
     {
         proc.setCurrentProgram (prog);
-        if (auto* m = proc.apvts.getParameter ("model")) m->setValueNotifyingHost ((float) model);
+        for (int c = 0; c < p6::kCalibCount - 1; ++c) proc.apvts.getParameter (PolysixAudioProcessor::calibId (c))->setValueNotifyingHost ((float) model);
         proc.prepareToPlay (48000.0, 512);
         juce::AudioBuffer<float> buf (2, 512);
         juce::AudioBuffer<float> all (2, 48000 * 3);
@@ -40,20 +40,20 @@ int main (int argc, char** argv)
                 }
             }
         }
-        std::printf ("%s program %-13s peak %.3f nonfinite %d\n", model ? "POLYSIX" : "CLASSIC", proc.getProgramName (prog).toRawUTF8(), peak, bad);
+        std::printf ("%s program %-13s peak %.3f nonfinite %d\n", model ? "CAL-ON " : "CAL-OFF", proc.getProgramName (prog).toRawUTF8(), peak, bad);
         juce::WavAudioFormat wav;
-        auto file = outDir.getChildFile (juce::String (model ? "polysix_" : "classic_") + "prog_" + juce::String (prog) + "_" + proc.getProgramName (prog).replaceCharacter (' ', '_') + ".wav");
+        auto file = outDir.getChildFile (juce::String (model ? "cal_on_" : "cal_off_") + "prog_" + juce::String (prog) + "_" + proc.getProgramName (prog).replaceCharacter (' ', '_') + ".wav");
         file.deleteFile();
         if (auto os = std::unique_ptr<juce::OutputStream> (file.createOutputStream()))
             if (auto w = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (os.get(), 48000.0, 2, 16, {}, 0)))
             { os.release(); w->writeFromAudioSampleBuffer (all, 0, all.getNumSamples()); }
     }
 
-    // MODEL is global: a preset change keeps it, a session restore brings it back
-    if (auto* m = proc.apvts.getParameter ("model")) m->setValueNotifyingHost (1.0f);
+    // calibration is global: a preset change keeps it
+    proc.apvts.getParameter ("cal_0")->setValueNotifyingHost (1.0f);
     proc.setCurrentProgram (3);
-    std::printf ("model after preset change: %.0f (expect 1)\n", proc.apvts.getRawParameterValue ("model")->load());
-    if (auto* m = proc.apvts.getParameter ("model")) m->setValueNotifyingHost (0.0f);
+    std::printf ("calibration after preset change: %.0f (expect 1)\n", proc.apvts.getRawParameterValue ("cal_0")->load());
+    proc.apvts.getParameter ("cal_0")->setValueNotifyingHost (0.0f);
 
     // state round trip
     proc.setCurrentProgram (5);

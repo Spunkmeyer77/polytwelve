@@ -128,11 +128,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     // Effects
     l.add (choice ("fxMode", "Effect", { "Off", "Chorus", "Phaser", "Ensemble" }, d.fxMode));
     l.add (knob ("fxSpeed", "Speed/Intensity", d.fxSpeed));
-    // Sound engine: the original Reaktor port, or the model built from the Polysix service manual
-    l.add (choice ("model", "Model", { "Classic", "Polysix" }, d.model));
-    // CLASSIC calibration against a real Polysix (0.8.0): each fix is its own A/B switch
+    // Calibration against a real Polysix (0.8.0): each fix is its own A/B switch
     for (int c = 0; c < p6::kCalibCount; ++c)
-        l.add (toggle (PolysixAudioProcessor::calibId (c), "Classic Cal: " + PolysixAudioProcessor::calibName (c), false));
+        l.add (toggle (PolysixAudioProcessor::calibId (c), "Calibration: " + PolysixAudioProcessor::calibName (c), false));
     return l;
 }
 
@@ -147,7 +145,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
             r ("mgFreq"), r ("mgDelay"), r ("mgLevel"), r ("mgMode"),
             r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"), r ("glide"), r ("glideLegato"),
             r ("arpOn"), r ("arpSpeed"), r ("arpRange"), r ("arpMode"), r ("arpLatch"), r ("arpSync"), r ("arpDiv"),
-            r ("fxMode"), r ("fxSpeed"), r ("model") };
+            r ("fxMode"), r ("fxSpeed") };
     for (int c = 0; c < p6::kCalibCount; ++c) raw.cal[c] = apvts.getRawParameterValue (calibId (c));
 
     presets = std::make_unique<PresetManager> (*this);
@@ -180,7 +178,7 @@ void PolysixAudioProcessor::pullParams()
     p.glide = f (raw.glide); p.glideLegato = b (raw.glideLegato);
     p.arpOn = b (raw.arpOn); p.arpSpeed = f (raw.arpSpeed); p.arpRange = i (raw.arpRange); p.arpMode = i (raw.arpMode);
     p.arpLatch = b (raw.arpLatch); p.arpSync = b (raw.arpSync); p.arpDiv = i (raw.arpDiv);
-    p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed); p.model = i (raw.model);
+    p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed);
     { int bits = 0; for (int c = 0; c < p6::kCalibCount; ++c) if (b (raw.cal[c])) bits |= 1 << c; p.calib = bits; }
 }
 
@@ -250,7 +248,7 @@ void PolysixAudioProcessor::setCurrentProgram (int index)
     for (auto* param : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
         {
-            if (rp->paramID == "model" || rp->paramID.startsWith ("cal_")) continue; // the engine choice is global, not part of a sound
+            if (rp->paramID.startsWith ("cal_")) continue; // calibration is global, not part of a sound
             float value = rp->convertFrom0to1 (rp->getDefaultValue());
             for (const auto& [id, v] : prog.values)
                 if (rp->paramID == id) value = v;
@@ -277,7 +275,7 @@ void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool ke
 {
     if (! source.hasType (apvts.state.getType())) return;
     auto tree = source.createCopy();
-    // presets don't change the engine (MODEL) or the CLASSIC calibration switches; sessions do
+    // presets don't change the calibration switches; sessions do
     auto keep = [&] (const juce::String& id, std::atomic<float>* now)
     {
         const float current = now->load();
@@ -288,7 +286,6 @@ void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool ke
             child.setProperty ("value", keepModel ? current : 0.0f, nullptr);
         }
     };
-    keep ("model", raw.model);
     for (int c = 0; c < p6::kCalibCount; ++c) keep (calibId (c), raw.cal[c]);
     const auto chord = juce::StringArray::fromTokens (tree.getProperty ("chordMemory", "0,3,7").toString(), ",", "");
     std::array<int, p6::kNumVoices> mem {};
