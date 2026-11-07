@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Polytwelve VERSION 0.8.0)
+# must come before project(), or the compiler is set up for the build machine's macOS
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
+
+project(Polytwelve VERSION 0.8.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
 
 # JUCE: use a local checkout if -DJUCE_DIR=... is given, otherwise download it
 if(DEFINED JUCE_DIR)

@@ -23,7 +23,7 @@ jobs:
         include:
           - name: macOS
             os: macos-15
-            configure: -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+            configure: -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
           - name: Windows
             os: windows-2022
             configure: ""
@@ -52,6 +52,7 @@ jobs:
         run: cmake -B build -DP12_COPY_PLUGINS=OFF ${{ matrix.configure }}
 
       - name: Build
+        shell: bash
         run: |
           set +e
           cmake --build build --config Release --parallel 4 2>&1 | tee build.log
@@ -66,6 +67,14 @@ jobs:
           exit $status
 
       # ---- tests / validation ------------------------------------------------------------
+
+      - name: Check minimum macOS (must load on macOS 12)
+        if: runner.os == 'macOS'
+        run: |
+          for f in $(find build -path "*.component/Contents/MacOS/*" -type f) $(find build -path "*.vst3/Contents/MacOS/*" -type f); do
+            echo "$f"; vtool -show-build "$f" | grep -E "minos|architecture"
+            if vtool -show-build "$f" | awk '/minos/ { split($2, v, "."); if (v[1] > 12) bad = 1 } END { exit bad }'; then :; else echo "::error::$f needs a macOS newer than 12"; exit 1; fi
+          done
       - name: Run plug-in tests (Linux)
         if: runner.os == 'Linux'
         run: |

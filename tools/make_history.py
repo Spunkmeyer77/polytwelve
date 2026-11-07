@@ -80,6 +80,11 @@ HISTORY = [
          "(plus an optional noise floor) into the CLASSIC engine. All off by default, so CLASSIC sounds as before.", []),
         ("Manual updated.", []),
     ]),
+    ("0.8.1: macOS fix", [
+        ("Fixed: on macOS 12 (and other versions older than the build machine) the plugin could not be opened "
+         "(\u201cThis Audio Unit v2 plug-in could not be opened\u201d). The minimum macOS is 10.13 again, and every build is "
+         "now checked for it.", []),
+    ]),
 ]
 
 def build():
