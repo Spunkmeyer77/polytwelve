@@ -68,6 +68,18 @@ HISTORY = [
         ]),
         ("The manual has a new chapter on the two engines.", []),
     ]),
+    ("0.8.0: Calibrated against a real Polysix", [
+        ("Both engines measured against 27 recordings of a real Polysix.", []),
+        ("POLYSIX model reworked to match them:", [
+            "Cutoff knob curve (almost shut at 4, closed at 2) and keyboard tracking pivot.",
+            "Louder self-oscillation; pulse that closes at PW 10; real pulse, PWM and sub levels.",
+            "MG speed curve, a third of the depth, longer MG delay; steeper envelope times.",
+            "Effects rebuilt with the measured speeds, depths and levels; ENSEMBLE is now the slow, deep swirl of the real unit.",
+        ]),
+        ("New <b>CLASSIC Calibration (A/B)</b> submenu in the preset menu: eight switches that each bring one of these fixes "
+         "(plus an optional noise floor) into the CLASSIC engine. All off by default, so CLASSIC sounds as before.", []),
+        ("Manual updated.", []),
+    ]),
 ]
 
 def build():

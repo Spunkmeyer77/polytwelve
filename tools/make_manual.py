@@ -250,7 +250,7 @@ def build():
                     "on both, so you can flip the switch and compare. MODEL belongs to the instrument, not to a sound: changing "
                     "preset keeps it, and your project remembers it.", body),
           bullets(["<b>CLASSIC</b> is the original Polytwelve engine, ported from the Polysix 2 Reaktor ensemble, with its "
-                   "ladder filter and stereo effects. It is unchanged from earlier versions.",
+                   "ladder filter and stereo effects. Out of the box it sounds as in earlier versions; the CLASSIC Calibration switches below let you move it, one part at a time, towards a real Polysix.",
                    "<b>POLYSIX</b> is built from the Korg Polysix service manual (circuit diagrams KLM-366 and KLM-368, "
                    "and the factory adjustment procedure)."]),
           Paragraph("What POLYSIX changes", h2),
@@ -258,17 +258,35 @@ def build():
                  ["Filter", "An SSM2044 model, the chip on the Polysix voice board: four transconductance stages that each "
                             "saturate softly, and a saturating resonance loop. At RESONANCE 10 it settles into a clean sine. The "
                             "bass thins as resonance rises, as on the original, so very resonant sounds play quieter."],
-                 ["Cutoff", "Spans about 15 Hz to 21 kHz (factory spec: 10\u201325 Hz to 19\u201324 kHz)."],
-                 ["KBD TRACK", "Reaches 150% at 10, as the factory spec gives."],
-                 ["MG", "FREQUENCY from a 25-second cycle up to 50 Hz (about 7 Hz at 4); DELAY up to about 10 s."],
-                 ["PWM SPEED", "Up to 20 Hz."],
+                 ["Cutoff", "The knob follows the curve measured on a real Polysix: open from 7 up, much darker at 5, "
+                            "almost shut at 4 and closed at 2. KBD TRACK pivots low on the keyboard, as on the real unit."],
+                 ["Pulse / PWM", "PW narrows all the way until the pulse closes at 10; PWM sweeps through that point, "
+                                 "about 5 Hz at SPEED 5. Pulse and PWM levels as measured."],
+                 ["Sub", "Sub oscillator level as measured (about 3 dB under the old level)."],
+                 ["MG", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; depth a third of the old one; "
+                        "DELAY reaches half depth after about 1.6 s at 5."],
+                 ["Envelopes", "Time knobs steeper: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."],
                  ["Effects", "Modelled on the KLM-368 effect board: bucket-brigade (MN3004) delay lines with their filters, "
                              "soft compander saturation and a little noise; mono, like the Polysix output. CHORUS: one delay, "
                              "2\u20134 ms. PHASE: a short swept delay (0.5\u20132.6 ms) with feedback, as on the original, "
                              "which is a flanging sound rather than a phaser. ENSEMBLE: three delays driven by a slow and a fast "
                              "modulation, 120\u00b0 apart."]], [28, 142]),
-          Paragraph("The POLYSIX model will be refined against recordings of a real Polysix. CLASSIC stays as it is, so you can "
-                    "always go back to it.", small)]
+          Paragraph("Since 0.8.0 the POLYSIX model is fitted to recordings of a real Polysix (27 test takes: levels, filter "
+                    "curve, resonance, envelopes, MG and all three effects).", small),
+          Paragraph("CLASSIC Calibration (A/B)", h2),
+          Paragraph("Open the preset menu (BANK) and choose <b>CLASSIC Calibration (A/B)</b>. Each item switches one fix, "
+                    "measured on a real Polysix, into the CLASSIC engine, so you can compare it and keep only the ones you "
+                    "like. All are off by default. They are global like MODEL: presets don't change them, projects remember them. "
+                    "They have no effect on POLYSIX, which always uses the first seven.", body),
+          table([["Switch", "What it changes"],
+                 ["Cutoff Curve", "The real CUTOFF knob law and KBD TRACK pivot."],
+                 ["Resonance Level", "Self-oscillation about 8 dB louder, as on the real unit."],
+                 ["Pulse Width Range", "Pulse closes at PW 10; real pulse/PWM levels; PWM SPEED range."],
+                 ["Sub Level", "Sub oscillator level as measured."],
+                 ["MG Rate & Depth", "Real FREQUENCY curve, a third of the depth, longer DELAY."],
+                 ["Envelope Times", "Steeper attack, decay and release time curves."],
+                 ["Effects", "Uses the fitted bucket-brigade effects (mono) with the real speeds and levels."],
+                 ["Noise Floor", "Adds the real unit's faint hiss and slow ripple (about \u221256 dB). Never on in POLYSIX, and \u201cAll On\u201d leaves it off: switch it on by itself."]], [34, 136])]
 
     s += [PageBreak(), Paragraph("9. Presets", h1),
           Paragraph("A preset stores every control plus the stored chord. The amber display shows the bank (FACTORY or USER), "

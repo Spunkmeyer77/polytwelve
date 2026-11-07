@@ -32,7 +32,7 @@ std::unique_ptr<APC> choice (const char* id, const char* name, juce::StringArray
     return std::make_unique<APC> (juce::ParameterID { id, 1 }, name, items, def);
 }
 
-std::unique_ptr<APB> toggle (const char* id, const char* name, bool def)
+std::unique_ptr<APB> toggle (const juce::String& id, const juce::String& name, bool def)
 {
     return std::make_unique<APB> (juce::ParameterID { id, 1 }, name, def);
 }
@@ -130,6 +130,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (knob ("fxSpeed", "Speed/Intensity", d.fxSpeed));
     // Sound engine: the original Reaktor port, or the model built from the Polysix service manual
     l.add (choice ("model", "Model", { "Classic", "Polysix" }, d.model));
+    // CLASSIC calibration against a real Polysix (0.8.0): each fix is its own A/B switch
+    for (int c = 0; c < p6::kCalibCount; ++c)
+        l.add (toggle (PolysixAudioProcessor::calibId (c), "Classic Cal: " + PolysixAudioProcessor::calibName (c), false));
     return l;
 }
 
@@ -145,6 +148,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
             r ("voiceMode"), r ("hold"), r ("analog"), r ("detune"), r ("bendRange"), r ("glide"), r ("glideLegato"),
             r ("arpOn"), r ("arpSpeed"), r ("arpRange"), r ("arpMode"), r ("arpLatch"), r ("arpSync"), r ("arpDiv"),
             r ("fxMode"), r ("fxSpeed"), r ("model") };
+    for (int c = 0; c < p6::kCalibCount; ++c) raw.cal[c] = apvts.getRawParameterValue (calibId (c));
 
     presets = std::make_unique<PresetManager> (*this);
 }
@@ -177,6 +181,7 @@ void PolysixAudioProcessor::pullParams()
     p.arpOn = b (raw.arpOn); p.arpSpeed = f (raw.arpSpeed); p.arpRange = i (raw.arpRange); p.arpMode = i (raw.arpMode);
     p.arpLatch = b (raw.arpLatch); p.arpSync = b (raw.arpSync); p.arpDiv = i (raw.arpDiv);
     p.fxMode = i (raw.fxMode); p.fxSpeed = f (raw.fxSpeed); p.model = i (raw.model);
+    { int bits = 0; for (int c = 0; c < p6::kCalibCount; ++c) if (b (raw.cal[c])) bits |= 1 << c; p.calib = bits; }
 }
 
 void PolysixAudioProcessor::handleMidi (const juce::MidiMessage& m)
@@ -245,7 +250,7 @@ void PolysixAudioProcessor::setCurrentProgram (int index)
     for (auto* param : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
         {
-            if (rp->paramID == "model") continue; // the engine choice is global, not part of a sound
+            if (rp->paramID == "model" || rp->paramID.startsWith ("cal_")) continue; // the engine choice is global, not part of a sound
             float value = rp->convertFrom0to1 (rp->getDefaultValue());
             for (const auto& [id, v] : prog.values)
                 if (rp->paramID == id) value = v;
@@ -272,15 +277,19 @@ void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool ke
 {
     if (! source.hasType (apvts.state.getType())) return;
     auto tree = source.createCopy();
-    {   // presets don't change the engine (MODEL); sessions do
-        const float current = raw.model->load();
-        auto child = tree.getChildWithProperty ("id", "model");
+    // presets don't change the engine (MODEL) or the CLASSIC calibration switches; sessions do
+    auto keep = [&] (const juce::String& id, std::atomic<float>* now)
+    {
+        const float current = now->load();
+        auto child = tree.getChildWithProperty ("id", id);
         if (keepModel || ! child.isValid())
         {
-            if (! child.isValid()) { child = juce::ValueTree ("PARAM"); child.setProperty ("id", "model", nullptr); tree.appendChild (child, nullptr); }
+            if (! child.isValid()) { child = juce::ValueTree ("PARAM"); child.setProperty ("id", id, nullptr); tree.appendChild (child, nullptr); }
             child.setProperty ("value", keepModel ? current : 0.0f, nullptr);
         }
-    }
+    };
+    keep ("model", raw.model);
+    for (int c = 0; c < p6::kCalibCount; ++c) keep (calibId (c), raw.cal[c]);
     const auto chord = juce::StringArray::fromTokens (tree.getProperty ("chordMemory", "0,3,7").toString(), ",", "");
     std::array<int, p6::kNumVoices> mem {};
     int count = 0;

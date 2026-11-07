@@ -106,7 +106,38 @@ struct Params
     int   fxMode  = 0;         // 0=Off 1=Chorus 2=Phaser 3=Ensemble
     int   model   = 0;         // 0=Classic (the Reaktor port), 1=Polysix (from the service manual)
     float fxSpeed = 0.4f;      // 0..1 speed (chorus/phaser) or intensity (ensemble)
+    // Calibration against recordings of a real Polysix (0.8.0). CLASSIC applies only the bits
+    // switched on here (each is an A/B option); POLYSIX always applies the first seven.
+    int   calib   = 0;
 };
+
+enum CalibBits : int { calCutoff = 1, calResonance = 2, calPulse = 4, calSub = 8,
+                       calMg = 16, calEnvelope = 32, calEffects = 64, calNoise = 128 };
+constexpr int kCalibCount = 8;
+constexpr int kCalibPolysix = 127;
+
+// CUTOFF knob law measured on the real unit: almost shut by 4, closed at 2, as before from 7 up
+inline float cutoffLawCal (float c)
+{
+    static constexpr float xs[] = { 0.0f, 0.2f, 0.4f, 0.5f, 0.6f, 0.8f, 1.0f };
+    static constexpr float ys[] = { -0.2f, -0.08f, 0.13f, 0.335f, 0.495f, 0.8f, 1.0f };
+    c = clampf (c, 0.0f, 1.0f);
+    for (int i = 0; i < 6; ++i)
+        if (c <= xs[i + 1])
+            return ys[i] + (ys[i + 1] - ys[i]) * (c - xs[i]) / (xs[i + 1] - xs[i]);
+    return 1.0f;
+}
+// MG FREQUENCY measured on the real unit: 2.5 -> 0.57 Hz, 5 -> 3.2 Hz, 7.5 -> 16 Hz
+inline float mgKnobToHzCal (float k)
+{
+    static constexpr float xs[] = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+    static constexpr float ys[] = { 0.05f, 0.57f, 3.18f, 16.4f, 40.0f };
+    k = clampf (k, 0.0f, 1.0f);
+    for (int i = 0; i < 4; ++i)
+        if (k <= xs[i + 1])
+            return ys[i] * std::pow (ys[i + 1] / ys[i], (k - xs[i]) / (xs[i + 1] - xs[i]));
+    return 40.0f;
+}
 
 constexpr std::array<double, 6> kArpDivBeats { 1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125 }; // 1/4 1/8 1/8T 1/16 1/16T 1/32
 
@@ -142,7 +173,7 @@ struct Vco
     float phase = 0.0f;
     int   cycle = 0; // main-cycle counter, mod 4
 
-    float process (float hz, float invSr, int waveform, float pw, int subMode)
+    float process (float hz, float invSr, int waveform, float pw, int subMode, float mainGain = 1.0f, float subGain = 1.0f, float pwMax = 0.97f)
     {
         const float dt = clampf (hz * invSr, 1.0e-6f, 0.45f);
         phase += dt;
@@ -155,13 +186,14 @@ struct Vco
         }
         else
         {
-            pw = clampf (pw, 0.03f, 0.97f);
+            pw = clampf (pw, 0.03f, pwMax);
             float v = phase < pw ? 1.0f : -1.0f;
             v += polyBlep (phase, dt);
             float t2 = phase + (1.0f - pw); if (t2 >= 1.0f) t2 -= 1.0f;
             v -= polyBlep (t2, dt);
             out = v - (2.0f * pw - 1.0f); // AC coupled
         }
+        out *= mainGain;
 
         if (subMode > 0)
         {
@@ -172,7 +204,7 @@ struct Vco
             s += polyBlep (sph, sdt);
             float t2 = sph + 0.5f; if (t2 >= 1.0f) t2 -= 1.0f;
             s -= polyBlep (t2, sdt);
-            out += s;
+            out += s * subGain;
         }
         return out;
     }
@@ -409,7 +441,7 @@ struct Effects
     // compander + chip: soft saturation of the wet path, as the 571 and the BBD clip gently
     static float bbdSat (float x) { return std::tanh (x * 1.4f) * (1.0f / 1.4f); }
 
-    void processPolysix (float in, float& L, float& R, int mode, float knob)
+    void processPolysix (float in, float& L, float& R, int mode, float knob, bool cal)
     {
         const float invSr = 1.0f / sr;
         const float us = sr * 1.0e-6f;                  // samples per microsecond
@@ -420,41 +452,42 @@ struct Effects
         {
             case 1: // CHORUS: one BBD, clock 8.3-16.7 us (120-60 kHz) swept by the speed LFO; dry:wet 2:1
             {
-                const float rate = 0.1f * std::exp2 (knob * 6.3f); // 0.1 .. 8 Hz
+                const float rate = cal ? 0.525f * std::exp2 (knob * 3.0f) : 0.1f * std::exp2 (knob * 6.3f); // cal: fitted to the recordings
                 slow += rate * invSr; if (slow >= 1.0f) slow -= 1.0f;
                 const float T = 12.5f + 4.2f * triFromPhase (slow);  // us
                 bbd[0].push (pre2 + bbdNoise());
                 const float wet = bbdFilter (bbdSat (bbd[0].read (256.0f * T * us)), post[0]);
-                out = 0.85f * (in + 0.5f * wet);
+                out = cal ? 0.95f * (in + 0.6f * wet) : 0.85f * (in + 0.5f * wet);
                 break;
             }
             case 2: // PHASE: one BBD, clock 2-10 us (500-100 kHz): a short swept delay with feedback, 1:1
             {
-                const float rate = 0.05f * std::exp2 (knob * 7.0f); // 0.05 .. 6.4 Hz
+                const float rate = cal ? 0.348f * std::exp2 (knob * 3.82f) : 0.05f * std::exp2 (knob * 7.0f);
                 slow += rate * invSr; if (slow >= 1.0f) slow -= 1.0f;
                 const float t = 0.5f * (triFromPhase (slow) + 1.0f);
                 const float T = 2.0f * std::pow (5.0f, t);           // exponential sweep 2..10 us
                 bbd[0].push (pre2 + 0.45f * bbdFb + bbdNoise());
                 const float wet = bbdFilter (bbdSat (bbd[0].read (std::max (1.0f, 256.0f * T * us))), post[0]);
                 bbdFb = wet;
-                out = 0.62f * (in + wet);
+                out = cal ? 1.0f * (in + wet) : 0.62f * (in + wet);
                 break;
             }
             case 3: // ENSEMBLE: three BBDs, clock 10-33 us, a slow and a fast LFO 120 degrees apart; 1:1:1
             {
-                slow += 0.55f * invSr; if (slow >= 1.0f) slow -= 1.0f;
-                fast += 6.2f * invSr;  if (fast >= 1.0f) fast -= 1.0f;
+                slow += (cal ? 0.125f : 0.55f) * invSr; if (slow >= 1.0f) slow -= 1.0f;
+                fast += (cal ? 5.0f : 6.2f) * invSr;  if (fast >= 1.0f) fast -= 1.0f;
                 const float depth = 0.2f + 0.8f * knob;
+                const float fw = cal ? 0.0f : 0.2f;
                 float wet = 0.0f;
                 for (int i = 0; i < 3; ++i)
                 {
                     const float off = (float) i / 3.0f;
-                    const float m = 0.8f * std::sin (kTwoPi * (slow + off)) + 0.2f * std::sin (kTwoPi * (fast + off));
-                    const float T = 21.0f + 11.0f * depth * m;          // us
+                    const float m = (1.0f - fw) * std::sin (kTwoPi * (slow + off)) + fw * std::sin (kTwoPi * (fast + off));
+                    const float T = cal ? 30.0f + 10.0f * depth * m : 21.0f + 11.0f * depth * m; // us
                     bbd[i].push (pre2 + bbdNoise());
                     wet += bbdFilter (bbdSat (bbd[i].read (256.0f * T * us)), post[i]);
                 }
-                out = 0.6f * (in + wet * (1.0f / 1.5f));
+                out = cal ? 0.85f * (in + wet) : 0.6f * (in + wet * (1.0f / 1.5f));
                 break;
             }
             default: break;
@@ -462,12 +495,12 @@ struct Effects
         L = R = out;
     }
 
-    void process (float in, float& L, float& R, int mode, float knob, int model)
+    void process (float in, float& L, float& R, int mode, float knob, int model, bool cal = false)
     {
-        if (model == 1)
+        if (model == 1 || cal)
         {
             if (lastMode != mode + 100) { for (auto& b : bbd) b.clear(); bbdFb = 0; lastMode = mode + 100; }
-            processPolysix (in, L, R, mode, knob);
+            processPolysix (in, L, R, mode, knob, cal);
             return;
         }
         process (in, L, R, mode, knob);
@@ -621,6 +654,7 @@ public:
     // ---- rendering --------------------------------------------------------------------------
     void render (float* outL, float* outR, int numSamples)
     {
+        cb = p.model == 1 ? kCalibPolysix : p.calib;
         if (captureRequest.exchange (false, std::memory_order_acq_rel)) captureChord (1);
         checkModeChanges();
 
@@ -646,7 +680,13 @@ public:
             const float y = mono - dcX + 0.9995f * dcY; dcX = mono; dcY = y;
 
             float L, R;
-            fx.process (y, L, R, p.fxMode, p.fxSpeed, p.model);
+            fx.process (y, L, R, p.fxMode, p.fxSpeed, p.model, (cb & calEffects) != 0);
+            if (p.calib & calNoise) // the real unit's floor: hiss at about -56 dB under a note, with a slow ripple
+            {
+                humPh += 4.4f * invSr; if (humPh >= 1.0f) humPh -= 1.0f;
+                const float n = hissRng.bi() * 0.0016f * (1.0f + 0.5f * std::sin (kTwoPi * humPh));
+                L += n; R += n;
+            }
             const float g = 0.8f * smVol * smVol;
             outL[i] = L * g;
             outR[i] = R * g;
@@ -667,6 +707,8 @@ private:
     bool  pedal = false;
     float lastPlayed = -1.0f;        // pitch of the most recent note (poly glide source)
     float smCutoff = 0.75f, smRes = 0.0f, smVol = 0.75f, smAtten = 0.0f;
+    Rng hissRng { 0x9E3779B9u }; float humPh = 0.0f;
+    int cb = 0; // calibration bits in force for this block
     float dcX = 0.0f, dcY = 0.0f;
 
     std::array<bool, 128> physDown {}, logical {};
@@ -915,12 +957,14 @@ private:
         const float an = p.analog;
 
         // MG (per voice, like the ensemble): triangle with delayed fade-in, rate wobble from "Analog"
-        const float mgHz = (p.model == 1 ? mgKnobToHzPolysix (p.mgFreq) : mgKnobToHz (p.mgFreq)) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
+        const float mgHz = ((cb & calMg) ? mgKnobToHzCal (p.mgFreq) : p.model == 1 ? mgKnobToHzPolysix (p.mgFreq) : mgKnobToHz (p.mgFreq)) * std::exp2 (an * 0.15f * v.mgRateRnd.tick (1.0f, invSr));
         v.mgPhase += mgHz * invSr; if (v.mgPhase >= 1.0f) v.mgPhase -= 1.0f;
         const float tri = triFromPhase (v.mgPhase);
-        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / logTimeToSec (p.mgDelay * (p.model == 1 ? 80.0f : 70.0f)));
+        const float mgDelaySec = (cb & calMg) ? std::max (0.001f, 12.8f * p.mgDelay * p.mgDelay) // real: half depth after 1.6 s at 5
+                                             : logTimeToSec (p.mgDelay * (p.model == 1 ? 80.0f : 70.0f));
+        if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / mgDelaySec);
         else        v.mgEnv = std::max (0.0f, v.mgEnv - invSr / 0.001f);
-        const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel;
+        const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel * ((cb & calMg) ? 0.33f : 1.0f); // measured depth is a third
 
         // pitch
         const float drift = v.drift.tick (0.3f, invSr);
@@ -941,26 +985,38 @@ private:
 
         // PW / PWM
         float pw = 0.5f;
-        if (p.waveform == 1) pw = 0.5f + 0.45f * p.pwPwm;
+        const bool cp = (cb & calPulse) != 0; // the real pulse narrows until it closes
+        const float pwSpan = cp ? 0.5f : 0.45f;
+        if (p.waveform == 1) pw = 0.5f + pwSpan * p.pwPwm;
         else if (p.waveform == 2)
         {
             // Polysix: up to 20 Hz
-            const float hz = 0.1f * std::exp2 (p.pwmSpeed * (p.model == 1 ? 7.64f : 7.0f)) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
+            const float hz = (cp ? 1.25f * std::exp2 (p.pwmSpeed * 4.0f) : 0.1f * std::exp2 (p.pwmSpeed * (p.model == 1 ? 7.64f : 7.0f))) * std::exp2 (an * 0.2f * v.pwmRateRnd.tick (0.7f, invSr));
             v.pwmPhase += hz * invSr; if (v.pwmPhase >= 1.0f) v.pwmPhase -= 1.0f;
-            pw = 0.5f + 0.45f * p.pwPwm * triFromPhase (v.pwmPhase);
+            pw = 0.5f + pwSpan * p.pwPwm * triFromPhase (v.pwmPhase);
         }
-        const float osc = 0.55f * v.vco.process (pitchToHz (oscPitch), invSr, p.waveform, pw, p.subOsc);
+        float mainGain = 1.0f;
+        if (cp && p.waveform != 0) mainGain = (p.waveform == 2 ? 0.48f : 0.77f) * clampf ((1.0f - pw) / 0.3f, 0.0f, 1.0f);
+        const float osc = 0.55f * v.vco.process (pitchToHz (oscPitch), invSr, p.waveform, pw, p.subOsc,
+                                                 mainGain, (cb & calSub) ? 0.52f : 1.0f, cp ? 0.995f : 0.97f);
 
         // EG
-        const float aSec = logTimeToSec (p.attack * 80.0f);
-        const float dSec = logTimeToSec (p.decay * 80.0f + an * 3.0f * v.offDecay);
-        const float rSec = logTimeToSec (p.release * 80.0f + an * 3.0f * v.offRelease);
+        float aSec = logTimeToSec (p.attack * 80.0f);
+        float dSec = logTimeToSec (p.decay * 80.0f + an * 3.0f * v.offDecay);
+        float rSec = logTimeToSec (p.release * 80.0f + an * 3.0f * v.offRelease);
+        if (cb & calEnvelope) // the real unit's time knobs are steeper: shorter at the bottom, longer at the top
+        {
+            aSec *= std::exp2 ((p.attack - 0.5f) * 2.2f);
+            dSec *= std::exp2 ((p.decay - 0.5f) * 2.2f);
+            rSec *= 0.41f * std::exp2 ((p.release - 0.5f) * 5.3f);
+        }
         const float eg = v.eg.tick (aSec, dSec, p.sustain, rSec, sr);
 
         // VCF
         // Polysix: CUTOFF spans 10-25 Hz to 19-24 kHz and KBD TRACK reaches 150% (service manual)
-        float cut = (p.model == 1 ? 10.5f + smCutoff * 125.5f : 21.0f + smCutoff * 110.0f)
-                  + (voicePitch - 60.0f) * p.kbdTrack * (p.model == 1 ? 1.5f : 1.0f)
+        const float cKnob = (cb & calCutoff) ? cutoffLawCal (smCutoff) : smCutoff;
+        float cut = (p.model == 1 ? 10.5f + cKnob * 125.5f : 21.0f + cKnob * 110.0f)
+                  + (voicePitch - ((cb & calCutoff) ? 24.0f : 60.0f)) * p.kbdTrack * (p.model == 1 && ! (cb & calCutoff) ? 1.5f : 1.0f) // real KBD TRACK pivots low on the keyboard
                   + eg * p.egInt * 60.0f
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
@@ -970,6 +1026,7 @@ private:
             filtered = v.ssm.process (osc, fc, smRes, sr);
         else
             filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
+        if (cb & calResonance) filtered *= 1.0f + 1.5f * smRes * smRes; // real self-oscillation is about 8 dB louder
 
         // VCA
         const float step = 1000.0f * invSr; // slew-limited gate, as in the ensemble

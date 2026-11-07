@@ -141,8 +141,8 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     int lastChordVersion = -1, flashTicks = 0;
 
-    float value (const char* id) const { return proc.apvts.getRawParameterValue (id)->load(); }
-    void setValue (const char* id, float v);
+    float value (const juce::String& id) const { return proc.apvts.getRawParameterValue (id)->load(); }
+    void setValue (const juce::String& id, float v);
     void stepParam (const char* id, int delta);
     ImgButton& addButton (const ui::Item&);
 

@@ -8,6 +8,14 @@ class PolysixAudioProcessor : public juce::AudioProcessor
 {
 public:
     PolysixAudioProcessor();
+    // CLASSIC calibration switches (bit order of p6::CalibBits)
+    static juce::String calibId (int c)   { return "cal_" + juce::String (c); }
+    static juce::String calibName (int c)
+    {
+        static const char* n[] = { "Cutoff Curve", "Resonance Level", "Pulse Width Range", "Sub Level",
+                                   "MG Rate & Depth", "Envelope Times", "Effects", "Noise Floor" };
+        return n[juce::jlimit (0, p6::kCalibCount - 1, c)];
+    }
     ~PolysixAudioProcessor() override = default;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -70,6 +78,7 @@ private:
                            *voiceMode, *hold, *analog, *detune, *bendRange, *glide, *glideLegato,
                            *arpOn, *arpSpeed, *arpRange, *arpMode, *arpLatch, *arpSync, *arpDiv,
                            *fxMode, *fxSpeed, *model;
+        std::atomic<float>* cal[p6::kCalibCount] {};
     } raw {};
 
     void pullParams();

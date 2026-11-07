@@ -470,7 +470,7 @@ PolysixEditor::~PolysixEditor()
     setLookAndFeel (nullptr);
 }
 
-void PolysixEditor::setValue (const char* id, float v)
+void PolysixEditor::setValue (const juce::String& id, float v)
 {
     if (auto* prm = proc.apvts.getParameter (id))
     {
@@ -702,6 +702,16 @@ void PolysixEditor::showPresetMenu()
     menu.addItem (90001, "Save As...");
     menu.addItem (90004, "Delete \"" + pm.getCurrentName() + "\"...", pm.currentIsUser() && pm.indexOfKey (current) >= 0);
     menu.addItem (90005, "Step Through Favourites Only", true, favouritesOnly);
+    {
+        juce::PopupMenu cal;
+        for (int c = 0; c < p6::kCalibCount; ++c)
+            cal.addItem (91000 + c, PolysixAudioProcessor::calibName (c), true, value (PolysixAudioProcessor::calibId (c)) > 0.5f);
+        cal.addSeparator();
+        cal.addItem (91100, "All On (matches the real Polysix)");
+        cal.addItem (91101, "All Off (original CLASSIC)");
+        menu.addSeparator();
+        menu.addSubMenu ("CLASSIC Calibration (A/B)", cal);
+    }
     menu.addSeparator();
     menu.addItem (90002, "Open Preset File...");
     menu.addItem (90003, "Show Preset Folder");
@@ -717,6 +727,11 @@ void PolysixEditor::showPresetMenu()
             else if (r == 90003) { m.getUserDir().createDirectory(); m.getUserDir().revealToUser(); }
             else if (r == 90004) askDelete();
             else if (r == 90005) { favouritesOnly = ! favouritesOnly; canvas.repaint(); }
+            else if (r >= 91000 && r < 91000 + p6::kCalibCount)
+            { const auto id = PolysixAudioProcessor::calibId (r - 91000); setValue (id, value (id) > 0.5f ? 0.0f : 1.0f); }
+            else if (r == 91100 || r == 91101)
+            { for (int c = 0; c < p6::kCalibCount - 1; ++c) setValue (PolysixAudioProcessor::calibId (c), r == 91100 ? 1.0f : 0.0f);
+              if (r == 91101) setValue (PolysixAudioProcessor::calibId (p6::kCalibCount - 1), 0.0f); }
             else if (r >= favBase) m.load (r - favBase);
             else if (r > 0)        m.load (r - 1);
             refreshButtons();
