@@ -249,7 +249,8 @@ def build():
           Paragraph("Polytwelve's engine is ported from the Polysix 2 Reaktor ensemble. Since 0.8.0 it can also be moved, one "
                     "part at a time, towards measurements of a real Korg Polysix (27 test recordings). Open the preset menu "
                     "(BANK) and choose <b>Calibration (A/B)</b>: each item switches one fix on or off, so you can compare it "
-                    "and keep only the ones you like. All are off by default, which is the original sound. They belong to the "
+                    "and keep only the ones you like. By default the first six are on and Effects and Noise Floor are off; "
+                    "\u201cDefaults\u201d brings that back and \u201cAll Off\u201d gives the original sound. They belong to the "
                     "instrument, not to a sound: presets don't change them, and your project remembers them.", body),
           table([["Switch", "What it changes"],
                  ["Cutoff Curve", "The real CUTOFF knob law (open from 7 up, much darker at 5, almost shut at 4, closed at 2) "
@@ -260,9 +261,9 @@ def build():
                  ["MG Rate & Depth", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; a third of the depth; DELAY "
                                      "reaches half depth after about 1.6 s at 5."],
                  ["Envelope Times", "Steeper time knobs: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."],
-                 ["Effects", "Bucket-brigade effects (mono, like the original) with the measured speeds, depths and levels."],
-                 ["Noise Floor", "The real unit's faint hiss and slow ripple (about \u221256 dB). \u201cAll On\u201d leaves it "
-                                 "off: switch it on by itself."]], [34, 136])]
+                 ["Effects", "Bucket-brigade effects (mono, like the original) with the measured speeds, depths and levels. "
+                             "Off by default: the original stereo effects play."],
+                 ["Noise Floor", "The real unit's faint hiss and slow ripple (about \u221256 dB). Off by default."]], [34, 136])]
 
     s += [PageBreak(), Paragraph("9. Presets", h1),
           Paragraph("A preset stores every control plus the stored chord. The amber display shows the bank (FACTORY or USER), "

@@ -87,7 +87,9 @@ HISTORY = [
     ]),
     ("0.9.0: One engine, Transistor Labs", [
         ("The POLYSIX engine is removed: the original engine is the one that stays. The MODEL switch is gone from the panel.", []),
-        ("The calibration switches remain, in the preset menu (BANK) under <b>Calibration (A/B)</b>; all off by default.", []),
+        ("The calibration fixes for the filter, resonance, pulse width, sub, MG and envelopes are now <b>on by default</b>. "
+         "Effects and Noise Floor stay off (the original effects play). Switch any of them in the preset menu (BANK) under "
+         "<b>Calibration (A/B)</b>; <b>Defaults</b> restores this setting, <b>All Off</b> gives the original sound.", []),
         ("Fixed: in CHORD mode a new chord cut off the previous one. Chords are now polyphonic, so a released chord "
          "rings through its release.", []),
         ("The vendor is now <b>Transistor Labs</b> (plugin lists, installers, About window, manual). User presets move "

@@ -707,7 +707,7 @@ void PolysixEditor::showPresetMenu()
         for (int c = 0; c < p6::kCalibCount; ++c)
             cal.addItem (91000 + c, PolysixAudioProcessor::calibName (c), true, value (PolysixAudioProcessor::calibId (c)) > 0.5f);
         cal.addSeparator();
-        cal.addItem (91100, "All On (matches the real Polysix)");
+        cal.addItem (91100, "Defaults (all on except Effects and Noise Floor)");
         cal.addItem (91101, "All Off (original sound)");
         menu.addSeparator();
         menu.addSubMenu ("Calibration (A/B)", cal);
@@ -730,8 +730,8 @@ void PolysixEditor::showPresetMenu()
             else if (r >= 91000 && r < 91000 + p6::kCalibCount)
             { const auto id = PolysixAudioProcessor::calibId (r - 91000); setValue (id, value (id) > 0.5f ? 0.0f : 1.0f); }
             else if (r == 91100 || r == 91101)
-            { for (int c = 0; c < p6::kCalibCount - 1; ++c) setValue (PolysixAudioProcessor::calibId (c), r == 91100 ? 1.0f : 0.0f);
-              if (r == 91101) setValue (PolysixAudioProcessor::calibId (p6::kCalibCount - 1), 0.0f); }
+            { for (int c = 0; c < p6::kCalibCount; ++c)
+                  setValue (PolysixAudioProcessor::calibId (c), r == 91100 && PolysixAudioProcessor::calibDefault (c) ? 1.0f : 0.0f); }
             else if (r >= favBase) m.load (r - favBase);
             else if (r > 0)        m.load (r - 1);
             refreshButtons();

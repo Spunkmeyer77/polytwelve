@@ -50,7 +50,7 @@ int main (int argc, char** argv)
     }
 
     // calibration is global: a preset change keeps it
-    proc.apvts.getParameter ("cal_0")->setValueNotifyingHost (1.0f);
+    proc.apvts.getParameter ("cal_0")->setValueNotifyingHost (1.0f); // default on
     proc.setCurrentProgram (3);
     std::printf ("calibration after preset change: %.0f (expect 1)\n", proc.apvts.getRawParameterValue ("cal_0")->load());
     proc.apvts.getParameter ("cal_0")->setValueNotifyingHost (0.0f);

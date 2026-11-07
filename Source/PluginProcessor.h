@@ -9,6 +9,8 @@ class PolysixAudioProcessor : public juce::AudioProcessor
 public:
     PolysixAudioProcessor();
     // calibration switches (bit order of p6::CalibBits)
+    // on by default: everything except Effects and Noise Floor
+    static bool calibDefault (int c)      { return c < 6; }
     static juce::String calibId (int c)   { return "cal_" + juce::String (c); }
     static juce::String calibName (int c)
     {

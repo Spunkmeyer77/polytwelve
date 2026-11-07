@@ -130,7 +130,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (knob ("fxSpeed", "Speed/Intensity", d.fxSpeed));
     // Calibration against a real Polysix (0.8.0): each fix is its own A/B switch
     for (int c = 0; c < p6::kCalibCount; ++c)
-        l.add (toggle (PolysixAudioProcessor::calibId (c), "Calibration: " + PolysixAudioProcessor::calibName (c), false));
+        l.add (toggle (PolysixAudioProcessor::calibId (c), "Calibration: " + PolysixAudioProcessor::calibName (c), PolysixAudioProcessor::calibDefault (c)));
     return l;
 }
 
@@ -276,17 +276,17 @@ void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool ke
     if (! source.hasType (apvts.state.getType())) return;
     auto tree = source.createCopy();
     // presets don't change the calibration switches; sessions do
-    auto keep = [&] (const juce::String& id, std::atomic<float>* now)
+    auto keep = [&] (const juce::String& id, std::atomic<float>* now, float def)
     {
         const float current = now->load();
         auto child = tree.getChildWithProperty ("id", id);
         if (keepModel || ! child.isValid())
         {
             if (! child.isValid()) { child = juce::ValueTree ("PARAM"); child.setProperty ("id", id, nullptr); tree.appendChild (child, nullptr); }
-            child.setProperty ("value", keepModel ? current : 0.0f, nullptr);
+            child.setProperty ("value", keepModel ? current : def, nullptr);
         }
     };
-    for (int c = 0; c < p6::kCalibCount; ++c) keep (calibId (c), raw.cal[c]);
+    for (int c = 0; c < p6::kCalibCount; ++c) keep (calibId (c), raw.cal[c], calibDefault (c) ? 1.0f : 0.0f);
     const auto chord = juce::StringArray::fromTokens (tree.getProperty ("chordMemory", "0,3,7").toString(), ",", "");
     std::array<int, p6::kNumVoices> mem {};
     int count = 0;
