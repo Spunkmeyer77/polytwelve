@@ -92,6 +92,7 @@ HISTORY = [
          "<b>Calibration (A/B)</b>; <b>Defaults</b> restores this setting, <b>All Off</b> gives the original sound.", []),
         ("Fixed: in CHORD mode a new chord cut off the previous one. Chords are now polyphonic, so a released chord "
          "rings through its release.", []),
+        ("Fixed: the MG (LFO) stopped as soon as a key was let go; it now keeps modulating through the release.", []),
         ("The vendor is now <b>Transistor Labs</b> (plugin lists, installers, About window, manual). User presets move "
          "automatically to the Transistor Labs preset folder.", []),
         ("Manual updated.", []),

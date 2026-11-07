@@ -287,7 +287,8 @@ struct Voice
     // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
     void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
-        if (! active) { vcf.reset(); mgEnv = 0.0f; gateSlew = 0.0f; }
+        if (! active) { vcf.reset(); gateSlew = 0.0f; }
+        if (! gate) mgEnv = 0.0f; // a new key restarts the MG delay
         pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
         eg.gateOn();
@@ -918,7 +919,7 @@ private:
         const float mgDelaySec = (cb & calMg) ? std::max (0.001f, 12.8f * p.mgDelay * p.mgDelay) // real: half depth after 1.6 s at 5
                                              : logTimeToSec (p.mgDelay * 70.0f);
         if (v.gate) v.mgEnv = std::min (1.0f, v.mgEnv + invSr / mgDelaySec);
-        else        v.mgEnv = std::max (0.0f, v.mgEnv - invSr / 0.001f);
+        // released voices keep their MG through the release tail
         const float mg = tri * v.mgEnv * p.mgLevel * p.mgLevel * ((cb & calMg) ? 0.33f : 1.0f); // measured depth is a third
 
         // pitch
