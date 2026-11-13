@@ -151,8 +151,8 @@ def build():
                  ["SUB OSC", "OFF \u00b7 1 OCT \u00b7 2 OCT", "Adds a square wave one or two octaves below the main oscillator, at equal level."]], [28, 35, 107]),
           Paragraph("Tip: Pulse with the sub at 1 OCT and a low cutoff gives classic Polysix basses. PWM with Ensemble gives lush strings.", small),
           Paragraph("VCF (filter)", h2),
-          Paragraph("A resonant low-pass filter with two models to choose from (see <b>VCF Model</b> below). Resonance stays in "
-                    "tune across the range, and at high settings the filter self-oscillates.", body),
+          Paragraph("A 4-pole (24 dB/oct) resonant low-pass filter with soft saturation in its feedback loop. Resonance stays in "
+                    "tune across the range, and at high settings the filter self-oscillates into a clean sine.", body),
           table([["Control", "Range", "What it does"],
                  ["CUTOFF", "27.5 Hz \u2013 17 kHz", "The filter's brightness. Lower = darker."],
                  ["RESONANCE", "0\u201310", "Emphasis at the cutoff. Near 10 the filter sings on its own."],
@@ -207,7 +207,7 @@ def build():
                  "Let go. MODE is now CHORD, the MEMORY LED stays lit and the STORED CHORD display shows Am7. Pressing D3 plays Dm7, F3 plays Fm7, and so on."]),
           bullets(["MEMORY with no keys held switches to Chord mode using the chord already stored.",
                    "Moving MODE to CHORD while holding two or more keys also stores them.",
-                   "The chord is saved with presets and with your project. The default chord is a minor triad (C3 \u00b7 Eb3 \u00b7 G3).",
+                   "The chord is saved with presets and with your project. The default chord is a major triad (C3 \u00b7 E3 \u00b7 G3).",
                    "Note names follow Ableton's convention (middle C = C3)."])]
 
     s += [Paragraph("7. Arpeggiator", h1),
@@ -245,36 +245,20 @@ def build():
                  ["TUNE", "\u00b1100 cents (\u22125 to +5 on the scale)", "Fine-tunes all voices by up to one semitone either way."],
                  ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."]], [28, 42, 100])]
 
-    s += [Paragraph("VCF Model", h1),
-          Paragraph("Polytwelve has two filter models. Open the preset menu (BANK) and choose <b>VCF Model</b> to switch "
-                    "between them while you play. Like the calibration switches, the model belongs to the instrument, not to a "
-                    "sound: presets don't change it, and your project remembers it.", body),
-          table([["Model", "Sound"],
-                 ["OLD SCHOOL (default)", "The original Polytwelve filter: a 4-pole (24 dB/oct) ladder whose input saturates "
-                                          "together with the resonance, for a firm, even tone across the range."],
-                 ["NEW AGE", "A 6-stage ladder with saturation only in the resonance loop. The dry signal stays cleaner and "
-                             "the resonance growls on its own. Resonance is tamed as the cutoff rises, and the level rises "
-                             "with resonance so the bass doesn't thin out. Near full resonance it is much louder than "
-                             "OLD SCHOOL: lower the ATTENUATOR if needed."]], [40, 130]),
-          Paragraph("Calibration (A/B)", h1),
-          Paragraph("Polytwelve's engine is ported from the Polysix 2 Reaktor ensemble. Since 0.8.0 it can also be moved, one "
-                    "part at a time, towards measurements of a real Korg Polysix (27 test recordings). Open the preset menu "
-                    "(BANK) and choose <b>Calibration (A/B)</b>: each item switches one fix on or off, so you can compare it "
-                    "and keep only the ones you like. By default the first six are on and Effects and Noise Floor are off; "
-                    "\u201cDefaults\u201d brings that back and \u201cAll Off\u201d gives the original sound. They belong to the "
-                    "instrument, not to a sound: presets don't change them, and your project remembers them.", body),
-          table([["Switch", "What it changes"],
+    s += [Paragraph("Calibration", h1),
+          Paragraph("Polytwelve's engine is ported from the Polysix 2 Reaktor ensemble and calibrated against measurements of a "
+                    "real Korg Polysix (27 test recordings). The calibration is built in and always on:", body),
+          table([["Area", "What it matches"],
                  ["Cutoff Curve", "The real CUTOFF knob law (open from 7 up, much darker at 5, almost shut at 4, closed at 2) "
                                   "and the real KBD TRACK pivot, low on the keyboard."],
                  ["Resonance Level", "Self-oscillation about 8 dB louder, as on the real unit."],
                  ["Pulse Width Range", "PW narrows until the pulse closes at 10; real pulse and PWM levels; PWM about 5 Hz at SPEED 5."],
                  ["Sub Level", "Sub oscillator about 3 dB quieter, as measured."],
-                 ["MG Rate & Depth", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; a third of the depth; DELAY "
+                 ["MG Rate &amp; Depth", "FREQUENCY about 0.6 Hz at 2.5, 3.2 Hz at 5, 16 Hz at 7.5; a third of the depth; DELAY "
                                      "reaches half depth after about 1.6 s at 5."],
-                 ["Envelope Times", "Steeper time knobs: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."],
-                 ["Effects", "Bucket-brigade effects (mono, like the original) with the measured speeds, depths and levels. "
-                             "Off by default: the original stereo effects play."],
-                 ["Noise Floor", "The real unit's faint hiss and slow ripple (about \u221256 dB). Off by default."]], [34, 136])]
+                 ["Envelope Times", "Steeper time knobs: very short at the bottom, ATTACK 10 about 10 s, RELEASE 10 about 19 s."]], [34, 136]),
+          Paragraph("Tip: as on the real Polysix, PW/PWM at 10 closes the pulse completely. Several factory sound effects use "
+                    "this with full resonance, so you hear only the filter singing.", small)]
 
     s += [PageBreak(), Paragraph("9. Presets", h1),
           Paragraph("A preset stores every control plus the stored chord. The amber display shows the bank (FACTORY or USER), "
@@ -290,13 +274,21 @@ def build():
                     "\u2605 ONLY. Your project remembers which preset was loaded. Factory presets also appear as programs in "
                     "hosts that show a program list.", body),
           Paragraph("Factory presets", h2),
-          table([["Preset", "Character"],
-                 ["Init", "Plain saw, the starting point"], ["Strings", "Slow saw pad through the Ensemble"],
-                 ["Brass", "Swelling filter envelope"], ["Bass", "16' pulse with sub, resonant pluck"],
-                 ["Square Lead", "Unison square with legato glide, delayed vibrato and chorus"],
-                 ["Rezzy Arp", "Resonant saw on a synced 1/16 arpeggio, through the phaser"],
-                 ["Filter Sweep", "PWM with the MG slowly sweeping the filter"],
-                 ["Minor Chord", "Chord mode with a minor triad, plucky, with chorus"]], [35, 135]),
+          Paragraph("Polytwelve's own starting points: <b>Init</b> (plain saw), <b>Strings</b>, <b>Brass</b>, <b>Bass</b>, "
+                    "<b>Square Lead</b>, <b>Rezzy Arp</b> and <b>Filter Sweep</b>.", body),
+          Paragraph("After them come the 64 programs from the original Korg Polysix factory setting charts (both sets, A-1 to "
+                    "D-8), entered from the charts with the same knob positions. Where a name appears twice, the second one has "
+                    "\u201c2\u201d added (Brass 2, Strings 2, Flute 2, Clavi 2). The unison solos use UNISON mode and the chime "
+                    "uses CHORD mode, as the charts ask.", body),
+          table([["Set 1", "Set 2"],
+                 ["Brass \u00b7 Strings \u00b7 Electric Piano 1 \u00b7 Clavi \u00b7 Acoustic Piano \u00b7 Organ 1 \u00b7 Moon Sound \u00b7 Vibes",
+                  "Brass Ensemble \u00b7 Mellow Brass \u00b7 Oboe \u00b7 Flute \u00b7 String Orchestra \u00b7 Solo Violin \u00b7 Bowing Strings \u00b7 Koto"],
+                 ["Synthe Organ \u00b7 High Strings \u00b7 Fat Solo Sound \u00b7 Saxophone \u00b7 Flute \u00b7 Trombone \u00b7 Guitar \u00b7 Honky Tonk Piano",
+                  "Electric Piano \u00b7 Organ Slow \u00b7 Organ Fast \u00b7 Harpsichord \u00b7 Clavi \u00b7 Female Chorus \u00b7 Male Chorus \u00b7 Steam Pipe Organ"],
+                 ["Lead Sound \u00b7 Fat Bass \u00b7 Reggae Sound \u00b7 Banjo \u00b7 Electric Piano 2 \u00b7 Filtered Clavi \u00b7 New Wave Organ \u00b7 Jazz Guitar",
+                  "Synthe 1\u20134 \u00b7 Slow Wah \u00b7 Synthe Bass \u00b7 Oriental Sound \u00b7 Synthe Harp"],
+                 ["Unison Solo Low \u00b7 Unison Solo High \u00b7 Organ 2 \u00b7 Chord Chime \u00b7 Sound Fall \u00b7 Thin Sound \u00b7 Touch Sound \u00b7 Kim Carnes",
+                  "Whistle \u00b7 Gambang \u00b7 Cave Echo \u00b7 Sound Effect 1\u20135"]], [85, 85]),
           Paragraph("Preset files", h2),
           Paragraph("User presets are .p6preset files, one per sound, which you can copy, back up or share. Favourites are listed "
                     "in favourites.txt in the same folder.", body),
