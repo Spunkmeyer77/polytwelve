@@ -97,6 +97,15 @@ HISTORY = [
          "automatically to the Transistor Labs preset folder.", []),
         ("Manual updated.", []),
     ]),
+    ("0.9.1: Two filter models", [
+        ("New <b>VCF Model</b> submenu in the preset menu (BANK):", [
+            "<b>OLD SCHOOL</b>: the filter so far, unchanged (default).",
+            "<b>NEW AGE</b>: a new 6-stage filter with saturated resonance, cutoff-dependent resonance taming and level "
+            "compensation.",
+        ]),
+        ("Like the calibration switches, the model is global: presets don't change it and projects remember it.", []),
+        ("Manual updated.", []),
+    ]),
 ]
 
 def build():
