@@ -702,21 +702,6 @@ void PolysixEditor::showPresetMenu()
     menu.addItem (90001, "Save As...");
     menu.addItem (90004, "Delete \"" + pm.getCurrentName() + "\"...", pm.currentIsUser() && pm.indexOfKey (current) >= 0);
     menu.addItem (90005, "Step Through Favourites Only", true, favouritesOnly);
-    {
-        juce::PopupMenu cal;
-        for (int c = 0; c < p6::kCalibCount; ++c)
-            cal.addItem (91000 + c, PolysixAudioProcessor::calibName (c), true, value (PolysixAudioProcessor::calibId (c)) > 0.5f);
-        cal.addSeparator();
-        cal.addItem (91100, "Defaults (all on except Effects and Noise Floor)");
-        cal.addItem (91101, "All Off (original sound)");
-        menu.addSeparator();
-        juce::PopupMenu vcf;
-        const int model = (int) std::lround (value ("vcfModel"));
-        vcf.addItem (92000, "Old School", true, model == 0);
-        vcf.addItem (92001, "New Age", true, model == 1);
-        menu.addSubMenu ("VCF Model", vcf);
-        menu.addSubMenu ("Calibration (A/B)", cal);
-    }
     menu.addSeparator();
     menu.addItem (90002, "Open Preset File...");
     menu.addItem (90003, "Show Preset Folder");
@@ -732,12 +717,6 @@ void PolysixEditor::showPresetMenu()
             else if (r == 90003) { m.getUserDir().createDirectory(); m.getUserDir().revealToUser(); }
             else if (r == 90004) askDelete();
             else if (r == 90005) { favouritesOnly = ! favouritesOnly; canvas.repaint(); }
-            else if (r >= 91000 && r < 91000 + p6::kCalibCount)
-            { const auto id = PolysixAudioProcessor::calibId (r - 91000); setValue (id, value (id) > 0.5f ? 0.0f : 1.0f); }
-            else if (r == 92000 || r == 92001) setValue ("vcfModel", (float) (r - 92000));
-            else if (r == 91100 || r == 91101)
-            { for (int c = 0; c < p6::kCalibCount; ++c)
-                  setValue (PolysixAudioProcessor::calibId (c), r == 91100 && PolysixAudioProcessor::calibDefault (c) ? 1.0f : 0.0f); }
             else if (r >= favBase) m.load (r - favBase);
             else if (r > 0)        m.load (r - 1);
             refreshButtons();

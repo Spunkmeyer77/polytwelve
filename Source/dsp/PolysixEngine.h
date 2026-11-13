@@ -80,7 +80,6 @@ struct Params
     float resonance = 0.0f;   // 0..1
     float egInt     = 0.0f;   // -1..+1
     float kbdTrack  = 0.5f;   // 0..1
-    int   vcfModel  = 0;      // 0=Old School (4-pole ladder) 1=New Age (my_bass Ladder6)
     // VCA
     int   vcaMode   = 0;      // 0=EG 1=Gate
     float attenDb   = 0.0f;   // -10..+10 dB
@@ -226,68 +225,6 @@ struct Ladder
 
 
 // ---------------------------------------------------------------------------------------------
-// VCF "New Age": the my_bass (Max for Live, gen~) Ladder6, ported line for line, quirks included.
-// 6 one-pole stages in the loop, output taken after stage 4, soft-saturated feedback whose drive
-// falls as the cutoff rises, and output level compensation that rises with resonance.
-namespace ladder6
-{
-    inline float scurve (float vI, float curve) { return (vI - curve * vI) / (curve - 2.0f * curve * std::fabs (vI) + 1.0f); }
-    inline float tanA (float vI)
-    {
-        const float A = 1.3f, curve = 0.3f, AvI = A * vI, CAvI = curve * AvI;
-        return (AvI - CAvI) / (curve - 2.0f * std::fabs (CAvI) + 1.0f);
-    }
-    inline float satSoft (float vin, float A, float L) { return (2.0f * L) / (1.0f + std::exp (-(2.0f * A / L) * vin)) - L; }
-}
-
-struct Ladder6
-{
-    float z[6] = { 0, 0, 0, 0, 0, 0 };
-    Rng   rng { 0x5eed6u };
-
-    void reset() { for (auto& v : z) v = 0.0f; }
-
-    // cf in Hz, q = resonance 0..1, sr = sample rate
-    float process (float xin, float cf, float q, float sr)
-    {
-        using namespace ladder6;
-        const float freqMin = 0.1f;
-        const float freqVo  = clampf (cf, freqMin, sr);
-        const float freqA   = clampf ((freqVo - freqMin) / (48000.0f - freqMin), 0.0f, 1.0f);
-        const float resMin = 1.992f, resMax = 22.8f;
-        const float resVi = q, resVo = resVi * (resMax - resMin) + resMin;
-
-        const float T = 1.0f / sr;
-        const float k = (4.0f * (resVo - 0.5f)) / (25.0f - 0.5f);
-        const float wd = 2.0f * kPi * freqVo;
-        const float wa = (2.0f / T) * tanA (wd * T * 0.5f);
-        const float g  = wa * T * 0.5f;
-        const float G  = g / (1.0f + g);
-        const float G2 = G * G, G3 = G2 * G, G4 = G3 * G, G5 = G4 * G, GAMMA = G3 * G3;
-        const float inv = 1.0f / (g + 1.0f);
-        const float S0 = z[0] * inv, S1 = z[1] * inv, S2 = z[2] * inv, S3 = z[3] * inv, S4 = z[4] * inv;
-
-        const float fbS = (G5 * S0) + (G4 * S1) + (G3 * S2) + (G2 * S3) + (G * S4) + S3; // S3 as in the original
-        const float resComp = scurve (freqA, -0.4f);
-        const float fbSat = satSoft (fbS, 1.2f - 0.52f * resComp, 1.62f);
-
-        const float vI = xin + rng.bi() * 0.0006f; // gen~ noise() is -1..1
-        const float u = (vI - k * fbSat) / (1.0f + k * GAMMA);
-
-        float lp = u, lpOut = 0.0f;
-        for (int i = 0; i < 6; ++i)
-        {
-            const float v = (lp - z[i]) * G;
-            lp = v + z[i];
-            z[i] = lp + v;
-            if (i == 3) lpOut = lp;
-        }
-        const float fOres = scurve (resVi, -0.2f);
-        return lpOut * (0.71f + 0.69f * fOres);
-    }
-};
-
-// ---------------------------------------------------------------------------------------------
 // Analog-style ADSR (exponential segments, retriggers from current level)
 struct Adsr
 {
@@ -331,7 +268,6 @@ struct Voice
 
     Vco    vco;
     Ladder vcf;
-    Ladder6 vcf6;
     Adsr   eg;
     float  gateSlew = 0.0f;  // VCA gate mode (slew-limited gate)
     float  pitchNow = 60.0f; // glided note pitch (semitones)
@@ -352,7 +288,7 @@ struct Voice
     // fromPitch < 0: jump straight to the note; otherwise glide from that pitch
     void start (int n, uint64_t t, float fromPitch = -1.0f)
     {
-        if (! active) { vcf.reset(); vcf6.reset(); gateSlew = 0.0f; }
+        if (! active) { vcf.reset(); gateSlew = 0.0f; }
         if (! gate) mgEnv = 0.0f; // a new key restarts the MG delay
         pitchNow = fromPitch >= 0.0f ? fromPitch : (float) n;
         note = n; gate = true; active = true; stamp = t;
@@ -579,7 +515,7 @@ class Engine
 public:
     Params p;
 
-    Engine() { const int minor[] = { 0, 3, 7 }; setChord (minor, 3, 60); }
+    Engine() { const int major[] = { 0, 4, 7 }; setChord (major, 3, 60); }
 
     // ---- chord memory -----------------------------------------------------------------------
     // Intervals above the lowest captured note, plus that note (for display). Captured by
@@ -1042,19 +978,8 @@ private:
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
         const float fc = std::min (pitchToHz (cut), 0.45f * sr);
-        float filtered;
-        if (p.vcfModel == 1)
-        {
-            // New Age: my_bass drives its filter with unscaled oscillators, so undo the 0.55 trim going in
-            // (the saturation reacts to level) and put it back after. It has its own resonance compensation.
-            constexpr float kDrive = 1.0f / 0.55f;
-            filtered = v.vcf6.process (osc * kDrive, fc, smRes, sr) / kDrive;
-        }
-        else
-        {
-            filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
-            if (cb & calResonance) filtered *= 1.0f + 1.5f * smRes * smRes; // real self-oscillation is about 8 dB louder
-        }
+        float filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
+        if (cb & calResonance) filtered *= 1.0f + 1.5f * smRes * smRes; // real self-oscillation is about 8 dB louder
 
         // VCA
         const float step = 1000.0f * invSr; // slew-limited gate, as in the ensemble

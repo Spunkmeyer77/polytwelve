@@ -98,12 +98,16 @@ HISTORY = [
         ("Manual updated.", []),
     ]),
     ("0.9.1: Two filter models", [
-        ("New <b>VCF Model</b> submenu in the preset menu (BANK):", [
-            "<b>OLD SCHOOL</b>: the filter so far, unchanged (default).",
-            "<b>NEW AGE</b>: a new 6-stage filter with saturated resonance, cutoff-dependent resonance taming and level "
-            "compensation.",
-        ]),
-        ("Like the calibration switches, the model is global: presets don't change it and projects remember it.", []),
+        ("New <b>VCF Model</b> submenu in the preset menu (BANK): <b>OLD SCHOOL</b> (the filter so far) or <b>NEW AGE</b> "
+         "(a 6-stage filter with saturated resonance), for testing.", []),
+        ("Manual updated.", []),
+    ]),
+    ("0.9.2: Polysix factory programs", [
+        ("The OLD SCHOOL filter is kept and the VCF Model submenu is removed.", []),
+        ("The 64 programs from the original Korg Polysix factory setting charts are now in the Factory list.", []),
+        ("The calibration is now built in: the filter, resonance, pulse width, sub, MG and envelope fixes are always on. "
+         "The Calibration (A/B) submenu is gone from the preset menu.", []),
+        ("The default stored chord is now a major triad (C3 \u00b7 E3 \u00b7 G3). The Minor Chord preset is removed.", []),
         ("Manual updated.", []),
     ]),
 ]

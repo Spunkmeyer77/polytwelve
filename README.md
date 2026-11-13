@@ -1,6 +1,6 @@
 # Polytwelve
 
-Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Transistor Labs, 2026. Version 0.9.1.
+Programmable 12-voice synth (AU / VST3 / LV2 / Standalone) by Transistor Labs, 2026. Version 0.9.2.
 
 ![Polytwelve panel](docs/panel.jpg)
 
