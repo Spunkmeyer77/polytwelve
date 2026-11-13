@@ -91,6 +91,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolysixAudioProcessor::creat
     l.add (knob ("resonance", "Resonance", d.resonance));
     l.add (custom ("egInt", "EG Intensity", -1.0f, 1.0f, d.egInt, [] (float v, int) { return juce::String (v * 10.0f, 1); }));
     l.add (knob ("kbdTrack", "Kbd Track", d.kbdTrack));
+    l.add (choice ("vcfModel", "VCF Model", { "Old School", "New Age" }, d.vcfModel));
     // VCA
     l.add (choice ("vcaMode", "VCA Mode", { "EG", "Gate" }, d.vcaMode));
     l.add (custom ("atten", "Attenuator", -10.0f, 10.0f, d.attenDb, [] (float v, int) { return juce::String (v, 1) + " dB"; }));
@@ -147,6 +148,7 @@ PolysixAudioProcessor::PolysixAudioProcessor()
             r ("arpOn"), r ("arpSpeed"), r ("arpRange"), r ("arpMode"), r ("arpLatch"), r ("arpSync"), r ("arpDiv"),
             r ("fxMode"), r ("fxSpeed") };
     for (int c = 0; c < p6::kCalibCount; ++c) raw.cal[c] = apvts.getRawParameterValue (calibId (c));
+    raw.vcfModel = r ("vcfModel");
 
     presets = std::make_unique<PresetManager> (*this);
 }
@@ -171,6 +173,7 @@ void PolysixAudioProcessor::pullParams()
     p.volume = f (raw.volume); p.tune = f (raw.tune);
     p.octave = i (raw.octave); p.waveform = i (raw.waveform); p.pwPwm = f (raw.pwPwm); p.pwmSpeed = f (raw.pwmSpeed); p.subOsc = i (raw.subOsc);
     p.cutoff = f (raw.cutoff); p.resonance = f (raw.resonance); p.egInt = f (raw.egInt); p.kbdTrack = f (raw.kbdTrack);
+    p.vcfModel = i (raw.vcfModel);
     p.vcaMode = i (raw.vcaMode); p.attenDb = f (raw.atten);
     p.attack = f (raw.attack); p.decay = f (raw.decay); p.sustain = f (raw.sustain); p.release = f (raw.release);
     p.mgFreq = f (raw.mgFreq); p.mgDelay = f (raw.mgDelay); p.mgLevel = f (raw.mgLevel); p.mgMode = i (raw.mgMode);
@@ -248,7 +251,7 @@ void PolysixAudioProcessor::setCurrentProgram (int index)
     for (auto* param : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (param))
         {
-            if (rp->paramID.startsWith ("cal_")) continue; // calibration is global, not part of a sound
+            if (rp->paramID.startsWith ("cal_") || rp->paramID == "vcfModel") continue; // global, not part of a sound
             float value = rp->convertFrom0to1 (rp->getDefaultValue());
             for (const auto& [id, v] : prog.values)
                 if (rp->paramID == id) value = v;
@@ -287,6 +290,7 @@ void PolysixAudioProcessor::restoreState (const juce::ValueTree& source, bool ke
         }
     };
     for (int c = 0; c < p6::kCalibCount; ++c) keep (calibId (c), raw.cal[c], calibDefault (c) ? 1.0f : 0.0f);
+    keep ("vcfModel", raw.vcfModel, 0.0f);
     const auto chord = juce::StringArray::fromTokens (tree.getProperty ("chordMemory", "0,3,7").toString(), ",", "");
     std::array<int, p6::kNumVoices> mem {};
     int count = 0;

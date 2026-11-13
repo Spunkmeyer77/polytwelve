@@ -81,6 +81,7 @@ private:
                            *arpOn, *arpSpeed, *arpRange, *arpMode, *arpLatch, *arpSync, *arpDiv,
                            *fxMode, *fxSpeed;
         std::atomic<float>* cal[p6::kCalibCount] {};
+        std::atomic<float>* vcfModel = nullptr;
     } raw {};
 
     void pullParams();

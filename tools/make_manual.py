@@ -151,8 +151,8 @@ def build():
                  ["SUB OSC", "OFF \u00b7 1 OCT \u00b7 2 OCT", "Adds a square wave one or two octaves below the main oscillator, at equal level."]], [28, 35, 107]),
           Paragraph("Tip: Pulse with the sub at 1 OCT and a low cutoff gives classic Polysix basses. PWM with Ensemble gives lush strings.", small),
           Paragraph("VCF (filter)", h2),
-          Paragraph("A 4-pole (24 dB/oct) resonant low-pass filter with soft saturation in its feedback loop. Resonance stays in "
-                    "tune across the range, and at high settings the filter self-oscillates into a clean sine.", body),
+          Paragraph("A resonant low-pass filter with two models to choose from (see <b>VCF Model</b> below). Resonance stays in "
+                    "tune across the range, and at high settings the filter self-oscillates.", body),
           table([["Control", "Range", "What it does"],
                  ["CUTOFF", "27.5 Hz \u2013 17 kHz", "The filter's brightness. Lower = darker."],
                  ["RESONANCE", "0\u201310", "Emphasis at the cutoff. Near 10 the filter sings on its own."],
@@ -245,7 +245,18 @@ def build():
                  ["TUNE", "\u00b1100 cents (\u22125 to +5 on the scale)", "Fine-tunes all voices by up to one semitone either way."],
                  ["BEND RANGE", "0\u201312 semitones (default 2)", "How far the PITCH wheel and MIDI pitch bend reach, up and down."]], [28, 42, 100])]
 
-    s += [Paragraph("Calibration (A/B)", h1),
+    s += [Paragraph("VCF Model", h1),
+          Paragraph("Polytwelve has two filter models. Open the preset menu (BANK) and choose <b>VCF Model</b> to switch "
+                    "between them while you play. Like the calibration switches, the model belongs to the instrument, not to a "
+                    "sound: presets don't change it, and your project remembers it.", body),
+          table([["Model", "Sound"],
+                 ["OLD SCHOOL (default)", "The original Polytwelve filter: a 4-pole (24 dB/oct) ladder whose input saturates "
+                                          "together with the resonance, for a firm, even tone across the range."],
+                 ["NEW AGE", "A 6-stage ladder with saturation only in the resonance loop. The dry signal stays cleaner and "
+                             "the resonance growls on its own. Resonance is tamed as the cutoff rises, and the level rises "
+                             "with resonance so the bass doesn't thin out. Near full resonance it is much louder than "
+                             "OLD SCHOOL: lower the ATTENUATOR if needed."]], [40, 130]),
+          Paragraph("Calibration (A/B)", h1),
           Paragraph("Polytwelve's engine is ported from the Polysix 2 Reaktor ensemble. Since 0.8.0 it can also be moved, one "
                     "part at a time, towards measurements of a real Korg Polysix (27 test recordings). Open the preset menu "
                     "(BANK) and choose <b>Calibration (A/B)</b>: each item switches one fix on or off, so you can compare it "

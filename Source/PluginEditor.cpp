@@ -710,6 +710,11 @@ void PolysixEditor::showPresetMenu()
         cal.addItem (91100, "Defaults (all on except Effects and Noise Floor)");
         cal.addItem (91101, "All Off (original sound)");
         menu.addSeparator();
+        juce::PopupMenu vcf;
+        const int model = (int) std::lround (value ("vcfModel"));
+        vcf.addItem (92000, "Old School", true, model == 0);
+        vcf.addItem (92001, "New Age", true, model == 1);
+        menu.addSubMenu ("VCF Model", vcf);
         menu.addSubMenu ("Calibration (A/B)", cal);
     }
     menu.addSeparator();
@@ -729,6 +734,7 @@ void PolysixEditor::showPresetMenu()
             else if (r == 90005) { favouritesOnly = ! favouritesOnly; canvas.repaint(); }
             else if (r >= 91000 && r < 91000 + p6::kCalibCount)
             { const auto id = PolysixAudioProcessor::calibId (r - 91000); setValue (id, value (id) > 0.5f ? 0.0f : 1.0f); }
+            else if (r == 92000 || r == 92001) setValue ("vcfModel", (float) (r - 92000));
             else if (r == 91100 || r == 91101)
             { for (int c = 0; c < p6::kCalibCount; ++c)
                   setValue (PolysixAudioProcessor::calibId (c), r == 91100 && PolysixAudioProcessor::calibDefault (c) ? 1.0f : 0.0f); }
