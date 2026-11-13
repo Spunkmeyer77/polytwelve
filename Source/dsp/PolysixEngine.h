@@ -641,6 +641,7 @@ private:
     bool  pedal = false;
     float lastPlayed = -1.0f;        // pitch of the most recent note (poly glide source)
     float smCutoff = 0.75f, smRes = 0.0f, smVol = 0.75f, smAtten = 0.0f;
+    Rng filterNoise { 0x2545F491u };
     Rng hissRng { 0x9E3779B9u }; float humPh = 0.0f;
     int cb = 0; // calibration bits in force for this block
     float dcX = 0.0f, dcY = 0.0f;
@@ -978,7 +979,8 @@ private:
                   + an * 2.0f * v.offFilter;
         if (p.mgMode == 1) cut += mg * 48.0f;
         const float fc = std::min (pitchToHz (cut), 0.45f * sr);
-        float filtered = v.vcf.process (osc, std::tan (kPi * fc * invSr), 4.2f * smRes);
+        // tiny circuit noise (about -100 dB) so full resonance can self-oscillate with the VCO silent, as on the real unit
+        float filtered = v.vcf.process (osc + filterNoise.bi() * 1.0e-5f, std::tan (kPi * fc * invSr), 4.2f * smRes);
         if (cb & calResonance) filtered *= 1.0f + 1.5f * smRes * smRes; // real self-oscillation is about 8 dB louder
 
         // VCA

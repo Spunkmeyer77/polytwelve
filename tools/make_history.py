@@ -105,6 +105,7 @@ HISTORY = [
     ("0.9.2: Polysix factory programs", [
         ("The OLD SCHOOL filter is kept and the VCF Model submenu is removed.", []),
         ("The 64 programs from the original Korg Polysix factory setting charts are now in the Factory list.", []),
+        ("At full resonance the filter now self-oscillates even with the oscillator silent, as on the real unit (several factory sound effects use this).", []),
         ("The calibration is now built in: the filter, resonance, pulse width, sub, MG and envelope fixes are always on. "
          "The Calibration (A/B) submenu is gone from the preset menu.", []),
         ("The default stored chord is now a major triad (C3 \u00b7 E3 \u00b7 G3). The Minor Chord preset is removed.", []),

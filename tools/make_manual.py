@@ -277,7 +277,7 @@ def build():
           Paragraph("Polytwelve's own starting points: <b>Init</b> (plain saw), <b>Strings</b>, <b>Brass</b>, <b>Bass</b>, "
                     "<b>Square Lead</b>, <b>Rezzy Arp</b> and <b>Filter Sweep</b>.", body),
           Paragraph("After them come the 64 programs from the original Korg Polysix factory setting charts (both sets, A-1 to "
-                    "D-8), entered from the charts with the same knob positions. Where a name appears twice, the second one has "
+                    "D-8), entered from the charts with the same knob positions. A few were adjusted so they sound right with Polytwelve\u2019s calibrated cutoff curve: the cutoff is opened a little on Acoustic Piano, Organ 1, Electric Piano 1, Vibes, Filtered Clavi, Unison Solo Low, Chord Chime, Flute 2 and Electric Piano, and the ATTENUATOR is lowered on Kim Carnes and Synthe 4. Where a name appears twice, the second one has "
                     "\u201c2\u201d added (Brass 2, Strings 2, Flute 2, Clavi 2). The unison solos use UNISON mode and the chime "
                     "uses CHORD mode, as the charts ask.", body),
           table([["Set 1", "Set 2"],
@@ -289,13 +289,13 @@ def build():
                   "Synthe 1\u20134 \u00b7 Slow Wah \u00b7 Synthe Bass \u00b7 Oriental Sound \u00b7 Synthe Harp"],
                  ["Unison Solo Low \u00b7 Unison Solo High \u00b7 Organ 2 \u00b7 Chord Chime \u00b7 Sound Fall \u00b7 Thin Sound \u00b7 Touch Sound \u00b7 Kim Carnes",
                   "Whistle \u00b7 Gambang \u00b7 Cave Echo \u00b7 Sound Effect 1\u20135"]], [85, 85]),
-          Paragraph("Preset files", h2),
+          KeepTogether([Paragraph("Preset files", h2),
           Paragraph("User presets are .p6preset files, one per sound, which you can copy, back up or share. Favourites are listed "
                     "in favourites.txt in the same folder.", body),
           table([["System", "Preset folder"],
                  ["macOS", "~/Library/Audio/Presets/Transistor Labs/Polytwelve"],
                  ["Windows", "Documents\\Transistor Labs\\Polytwelve\\Presets"],
-                 ["Linux", "~/.local/share/Transistor Labs/Polytwelve/Presets"]], [35, 135])]
+                 ["Linux", "~/.local/share/Transistor Labs/Polytwelve/Presets"]], [35, 135])])]
 
     s += [Paragraph("10. MIDI implementation", h1),
           Paragraph("Polytwelve responds on all MIDI channels.", body),
